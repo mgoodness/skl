@@ -17,6 +17,20 @@ type skillFile struct {
 	Data    []byte
 }
 
+// dirHasEntries reports whether path exists and contains at least one
+// entry. A missing path is not an error: it reports false, matching an
+// available (non-colliding) destination.
+func dirHasEntries(path string) (bool, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return len(entries) > 0, nil
+}
+
 // readSkillFiles walks dir once, in lexical order (which filepath.WalkDir
 // guarantees), and returns every entry relative to dir.
 func readSkillFiles(dir string) ([]skillFile, error) {

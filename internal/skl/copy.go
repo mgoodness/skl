@@ -9,10 +9,10 @@ import (
 // writeFiles materializes files (as produced by readSkillFiles) at dst. Per
 // ADR-0001, this is a real copy, never a symlink.
 //
-// Any existing contents at dst are removed first. Destination-collision
-// handling (refusing when dst is already non-empty, honoring --force) is
-// out of scope for this ticket and lands in a later one; until then, Add
-// always overwrites cleanly rather than merging with stale contents.
+// Any existing contents at dst are removed first. Callers are responsible
+// for destination-collision handling (refusing when dst is already
+// non-empty, unless --force) before calling writeFiles; by the time
+// writeFiles runs, overwriting dst is expected.
 func writeFiles(files []skillFile, dst string) error {
 	if err := os.RemoveAll(dst); err != nil {
 		return fmt.Errorf("removing existing %s: %w", dst, err)

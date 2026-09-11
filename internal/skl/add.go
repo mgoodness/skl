@@ -96,6 +96,13 @@ type AddOptions struct {
 	// (see globalLockfilePath) instead of the project-scoped equivalents.
 	// ProjectRoot is ignored when true.
 	Global bool
+	// Force overrides two refusals that would otherwise stop Add: a
+	// conflict (an existing lockfile entry with the same name but a
+	// different source) and a destination collision (a targeted
+	// destination directory that already exists and is non-empty). In
+	// both cases Force replaces what's there rather than merging with it.
+	// See CONTEXT.md's "Expand"/"Conflict" definitions.
+	Force bool
 }
 
 // AddResult describes the outcome of a successful Add call.
@@ -115,6 +122,20 @@ type AddResult struct {
 // install in that project's .skl-lock.json. Which adapters are targeted is
 // determined by ResolveAdapters from opts.RequestedAdapters and the
 // adapters detected on this machine.
+//
+// Lockfile identity is matched by name and source together (see ADR-0003
+// and CONTEXT.md's "Expand"/"Conflict" definitions):
+//
+//   - Same name, same source: the existing entry's adapters map is
+//     expanded with the newly targeted adapter(s) rather than duplicated.
+//   - Same name, different source: a conflict, refused unless opts.Force
+//     is set, in which case the entry's source/metadata is replaced
+//     entirely and only the adapters targeted by this call are recorded.
+//
+// Independently, each targeted adapter's destination is checked for a
+// collision: an existing, non-empty directory not already tracked by this
+// same name+source lockfile entry is refused unless opts.Force is set, in
+// which case its contents are removed and replaced cleanly.
 func Add(opts AddOptions) (*AddResult, error) {
 	if opts.Source == "" {
 		return nil, fmt.Errorf("source is required")
@@ -158,7 +179,40 @@ func Add(opts AddOptions) (*AddResult, error) {
 	}
 	contentHash := hashFiles(files)
 
-	adapterEntries := make(map[string]AdapterEntry, len(targetNames))
+	lockPath, err := resolveLockPath(projectRoot, opts.Global)
+	if err != nil {
+		return nil, fmt.Errorf("resolving lockfile path: %w", err)
+	}
+	lf, err := ReadLockfile(lockPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading lockfile: %w", err)
+	}
+
+	existing, hasEntry := lf[name]
+	conflict := hasEntry && existing.Source != opts.Source
+	if conflict && !opts.Force {
+		return nil, fmt.Errorf("skill %q is already installed from a different source %q; refusing to overwrite (use --force to replace it)", name, existing.Source)
+	}
+
+	// alreadyTracked holds the adapters this exact name+source is already
+	// recorded as installed for, so reinstalling to one of them is treated
+	// as an update, not a destination collision.
+	alreadyTracked := map[string]bool{}
+	if hasEntry && !conflict {
+		for adapterName := range existing.Adapters {
+			alreadyTracked[adapterName] = true
+		}
+	}
+
+	// Resolve and validate every target's destination before writing
+	// anything, so a collision discovered on a later adapter doesn't leave
+	// an earlier adapter's directory written but the lockfile untouched.
+	type installTarget struct {
+		adapter   Adapter
+		dest      string
+		entryPath string
+	}
+	targets := make([]installTarget, 0, len(targetNames))
 	for _, targetName := range targetNames {
 		adapter, ok := adapterByName(targetName)
 		if !ok {
@@ -169,27 +223,51 @@ func Add(opts AddOptions) (*AddResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := writeFiles(files, dest); err != nil {
-			return nil, fmt.Errorf("installing %q for adapter %q: %w", name, adapter.Name, err)
+
+		if !opts.Force && !alreadyTracked[targetName] {
+			nonEmpty, err := dirHasEntries(dest)
+			if err != nil {
+				return nil, fmt.Errorf("checking destination %q: %w", dest, err)
+			}
+			if nonEmpty {
+				return nil, fmt.Errorf("destination %q already exists and is not empty; refusing to overwrite (use --force to replace it)", dest)
+			}
 		}
-		adapterEntries[adapter.Name] = AdapterEntry{Path: filepath.ToSlash(entryPath)}
+
+		targets = append(targets, installTarget{adapter: adapter, dest: dest, entryPath: entryPath})
 	}
 
-	lockPath, err := resolveLockPath(projectRoot, opts.Global)
-	if err != nil {
-		return nil, fmt.Errorf("resolving lockfile path: %w", err)
-	}
-	lf, err := ReadLockfile(lockPath)
-	if err != nil {
-		return nil, fmt.Errorf("reading lockfile: %w", err)
+	adapterEntries := make(map[string]AdapterEntry, len(targets))
+	for _, t := range targets {
+		if err := writeFiles(files, t.dest); err != nil {
+			return nil, fmt.Errorf("installing %q for adapter %q: %w", name, t.adapter.Name, err)
+		}
+		adapterEntries[t.adapter.Name] = AdapterEntry{Path: filepath.ToSlash(t.entryPath)}
 	}
 
-	lf[name] = LockEntry{
-		Source:      opts.Source,
-		SourceType:  "local",
-		SkillPath:   ".",
-		ContentHash: contentHash,
-		Adapters:    adapterEntries,
+	if hasEntry && !conflict {
+		// Expand: merge this call's adapters into the existing entry rather
+		// than creating a duplicate.
+		merged := make(map[string]AdapterEntry, len(existing.Adapters)+len(adapterEntries))
+		for adapterName, entry := range existing.Adapters {
+			merged[adapterName] = entry
+		}
+		for adapterName, entry := range adapterEntries {
+			merged[adapterName] = entry
+		}
+		existing.ContentHash = contentHash
+		existing.Adapters = merged
+		lf[name] = existing
+	} else {
+		// Brand-new entry, or a forced conflict replacing the old one
+		// entirely: only this call's targeted adapters are recorded.
+		lf[name] = LockEntry{
+			Source:      opts.Source,
+			SourceType:  "local",
+			SkillPath:   ".",
+			ContentHash: contentHash,
+			Adapters:    adapterEntries,
+		}
 	}
 
 	if err := WriteLockfile(lockPath, lf); err != nil {

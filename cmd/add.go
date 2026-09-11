@@ -12,13 +12,14 @@ import (
 func newAddCmd() *cobra.Command {
 	var agents []string
 	var global bool
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "add <source>",
 		Short: "Install a skill from a source",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := skl.Add(skl.AddOptions{Source: args[0], RequestedAdapters: agents, Global: global})
+			result, err := skl.Add(skl.AddOptions{Source: args[0], RequestedAdapters: agents, Global: global, Force: force})
 			if err != nil {
 				return err
 			}
@@ -38,6 +39,7 @@ func newAddCmd() *cobra.Command {
 
 	cmd.Flags().StringSliceVarP(&agents, "agent", "a", nil, "adapter(s) to install for: comma-separated and/or repeated, supports \"*\" for all detected adapters (default: universal plus the detected adapter, if exactly one is detected)")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "install into each adapter's global destination and the global lockfile, instead of the project-scoped equivalents")
+	cmd.Flags().BoolVar(&force, "force", false, "override a conflicting source or a non-empty destination, replacing what's there instead of refusing")
 
 	return cmd
 }
