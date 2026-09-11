@@ -1,0 +1,40 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: .
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/mgoodness/skl/cmd.version={{.Version}}
+      - -X github.com/mgoodness/skl/cmd.commit={{.ShortCommit}}
+      - -X github.com/mgoodness/skl/cmd.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true # release-please already writes the changelog
+
+release:
+  mode: keep-existing # don't clobber the release body release-please wrote
+  use_existing_draft: true # attach to release-please's draft release, then publish it

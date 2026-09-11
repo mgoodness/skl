@@ -21,3 +21,11 @@ go build -o skl .
 ```console
 skl add ./path/to/some-skill
 ```
+
+## Releasing
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) from
+Conventional Commits on `main`, and built by [GoReleaser](https://goreleaser.com) once
+release-please tags a version. One-time setup (a GitHub App release-please's workflow
+needs to push its tag) is scripted, not manual: run
+[`scripts/setup-release-please-app.sh`](scripts/setup-release-please-app.sh).

@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          diff=$(gofmt -l .)
+          if [ -n "$diff" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$diff"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test -race
+        run: go test -race ./...
+
+      - name: go mod tidy drift check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      - name: gorelease
+        run: go run golang.org/x/exp/cmd/gorelease@latest
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: latest

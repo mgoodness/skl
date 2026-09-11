@@ -16,7 +16,7 @@ func hashFiles(files []skillFile) string {
 		if f.IsDir {
 			continue
 		}
-		fmt.Fprintf(h, "%s\x00", f.RelPath)
+		_, _ = fmt.Fprintf(h, "%s\x00", f.RelPath)
 		h.Write(f.Data)
 		h.Write([]byte{0})
 	}
