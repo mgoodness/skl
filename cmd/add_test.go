@@ -12,14 +12,16 @@ import (
 
 // setUpFakeProject fakes $HOME/$XDG_CONFIG_HOME with markers for every
 // adapter, chdirs into a fresh project root, and writes a minimal
-// single-skill fixture at ./my-skill, returning the project root. This
-// keeps every test's expectations independent of what's actually installed
-// on the machine running it.
-func setUpFakeProject(t *testing.T) (projectRoot string) {
+// single-skill fixture at ./my-skill, returning the project root plus the
+// fake home and XDG config home directories (needed by tests that also
+// assert against global-scope destinations). This keeps every test's
+// expectations independent of what's actually installed on the machine
+// running it.
+func setUpFakeProject(t *testing.T) (projectRoot, home, configHome string) {
 	t.Helper()
 
-	home := t.TempDir()
-	configHome := t.TempDir()
+	home = t.TempDir()
+	configHome = t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
 		t.Fatalf("creating fake ~/.claude: %v", err)
 	}
@@ -40,11 +42,11 @@ func setUpFakeProject(t *testing.T) (projectRoot string) {
 		t.Fatalf("writing fixture SKILL.md: %v", err)
 	}
 
-	return projectRoot
+	return projectRoot, home, configHome
 }
 
 func TestAddCommand_InstallsLocalSkillIntoProjectRoot(t *testing.T) {
-	projectRoot := setUpFakeProject(t)
+	projectRoot, _, _ := setUpFakeProject(t)
 
 	buf := new(bytes.Buffer)
 	root := cmd.NewRootCmd()
@@ -98,5 +100,38 @@ func TestAddCommand_UnknownAgentFlag_Errors(t *testing.T) {
 
 	if err := root.ExecuteContext(t.Context()); err == nil {
 		t.Fatal("Execute() error = nil, want error for unknown --agent value")
+	}
+}
+
+func TestAddCommand_GlobalFlag_InstallsIntoGlobalDestinationsAndGlobalLockfile(t *testing.T) {
+	projectRoot, home, configHome := setUpFakeProject(t)
+	dataHome := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dataHome)
+
+	buf := new(bytes.Buffer)
+	root := cmd.NewRootCmd()
+	root.SetOut(buf)
+	root.SetErr(buf)
+	root.SetArgs([]string{"add", "./my-skill", "--global", "--agent", "*"})
+
+	if err := root.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("Execute() error = %v, output: %s", err, buf.String())
+	}
+
+	for _, dir := range []string{
+		filepath.Join(home, ".claude", "skills", "my-skill"),
+		filepath.Join(configHome, "kit", "skills", "my-skill"),
+		filepath.Join(home, ".agents", "skills", "my-skill"),
+	} {
+		if _, err := os.Stat(filepath.Join(dir, "SKILL.md")); err != nil {
+			t.Errorf("expected %s/SKILL.md to exist: %v", dir, err)
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(projectRoot, ".skl-lock.json")); !os.IsNotExist(err) {
+		t.Errorf("expected no project-scoped .skl-lock.json with --global, stat err = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataHome, "skl", "lock.json")); err != nil {
+		t.Errorf("expected global lock.json to exist: %v", err)
 	}
 }
