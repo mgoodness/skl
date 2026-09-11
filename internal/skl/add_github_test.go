@@ -120,7 +120,7 @@ func TestAdd_GitHubShorthand_FetchesAndInstalls(t *testing.T) {
 		t.Errorf("fetcher called with %+v, want Owner=%q Repo=%q", call.Source, "owner", "simple-skill")
 	}
 	if call.Ref != "" {
-		t.Errorf("fetcher called with ref %q, want empty (default branch) — #ref pinning is out of this ticket's scope", call.Ref)
+		t.Errorf("fetcher called with ref %q, want empty (default branch) — @ref pinning is out of this ticket's scope", call.Ref)
 	}
 }
 
@@ -323,10 +323,8 @@ func TestAdd_MalformedGitHubLikeSource_FallsBackToLocalPathErrorClearly(t *testi
 	projectRoot := t.TempDir()
 
 	// Three path segments: not a valid "owner/repo" shorthand (that
-	// pattern requires exactly two), and not an existing local directory
-	// either — matches the shape of a GitHub tree-path source
-	// (owner/repo/tree/branch/path), which is out of this ticket's scope
-	// (see #10).
+	// pattern requires exactly two), not a tree-path (missing the "tree"
+	// literal segment), and not an existing local directory either.
 	_, err := skl.Add(skl.AddOptions{
 		Source:      "owner/repo/extra-path-segment",
 		ProjectRoot: projectRoot,
@@ -336,5 +334,237 @@ func TestAdd_MalformedGitHubLikeSource_FallsBackToLocalPathErrorClearly(t *testi
 	}
 	if !contains(err.Error(), "owner/repo/extra-path-segment") {
 		t.Errorf("error %q does not identify the offending source", err.Error())
+	}
+}
+
+func TestAdd_GitHubTreePath_Shorthand_FetchesAtRefAndInstallsOnlyThePath(t *testing.T) {
+	fakeHome(t) // universal only
+	projectRoot := t.TempDir()
+
+	fetcher := &fakeFetcher{fixtures: map[string]string{
+		"owner/nested-repo": "testdata/fixtures/nested-repo",
+	}}
+
+	result, err := skl.Add(skl.AddOptions{
+		Source:            "owner/nested-repo/tree/main/skills/tdd",
+		Fetcher:           fetcher,
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
+	})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+
+	if result.Name != "tdd" {
+		t.Errorf("result.Name = %q, want %q (the tree-path's own final segment, not the repo name)", result.Name, "tdd")
+	}
+
+	installed := filepath.Join(projectRoot, ".agents", "skills", "tdd", "SKILL.md")
+	data, err := os.ReadFile(installed)
+	if err != nil {
+		t.Fatalf("reading installed SKILL.md: %v", err)
+	}
+	want, err := os.ReadFile("testdata/fixtures/nested-repo/skills/tdd/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading fixture SKILL.md: %v", err)
+	}
+	if string(data) != string(want) {
+		t.Errorf("installed SKILL.md content does not match fixture")
+	}
+
+	// The nested resource file should have come along too, and the
+	// sibling skill at skills/other-skill should not have.
+	if _, err := os.ReadFile(filepath.Join(projectRoot, ".agents", "skills", "tdd", "resources", "notes.md")); err != nil {
+		t.Errorf("reading installed nested resource: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "other-skill")); !os.IsNotExist(err) {
+		t.Errorf("expected sibling skill other-skill not to be installed, stat err = %v", err)
+	}
+
+	if len(fetcher.calls) != 1 {
+		t.Fatalf("fetcher.calls = %v, want exactly 1 call", fetcher.calls)
+	}
+	call := fetcher.calls[0]
+	if call.Source.Owner != "owner" || call.Source.Repo != "nested-repo" {
+		t.Errorf("fetcher called with %+v, want Owner=%q Repo=%q", call.Source, "owner", "nested-repo")
+	}
+	if call.Ref != "main" {
+		t.Errorf("fetcher called with ref %q, want %q", call.Ref, "main")
+	}
+
+	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
+	if err != nil {
+		t.Fatalf("ReadLockfile() error = %v", err)
+	}
+	entry, ok := lf["tdd"]
+	if !ok {
+		t.Fatalf("lockfile missing entry for tdd")
+	}
+	if entry.Source != "owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("entry.Source = %q, want canonical %q", entry.Source, "owner/nested-repo/tree/main/skills/tdd")
+	}
+	if entry.SourceURL != "https://github.com/owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("entry.SourceURL = %q, want %q", entry.SourceURL, "https://github.com/owner/nested-repo/tree/main/skills/tdd")
+	}
+	if entry.Ref != "main" {
+		t.Errorf("entry.Ref = %q, want %q", entry.Ref, "main")
+	}
+	if entry.SkillPath != "skills/tdd" {
+		t.Errorf("entry.SkillPath = %q, want %q", entry.SkillPath, "skills/tdd")
+	}
+}
+
+func TestAdd_GitHubTreePath_FullURL_BehavesIdenticallyToShorthand(t *testing.T) {
+	fakeHome(t) // universal only
+	projectRoot := t.TempDir()
+
+	fetcher := &fakeFetcher{fixtures: map[string]string{
+		"owner/nested-repo": "testdata/fixtures/nested-repo",
+	}}
+
+	result, err := skl.Add(skl.AddOptions{
+		Source:            "https://github.com/owner/nested-repo/tree/main/skills/tdd",
+		Fetcher:           fetcher,
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
+	})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if result.Name != "tdd" {
+		t.Errorf("result.Name = %q, want %q", result.Name, "tdd")
+	}
+
+	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
+	if err != nil {
+		t.Fatalf("ReadLockfile() error = %v", err)
+	}
+	entry := lf["tdd"]
+	if entry.Source != "owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("entry.Source = %q, want canonical shorthand form %q even though a full URL was given", entry.Source, "owner/nested-repo/tree/main/skills/tdd")
+	}
+}
+
+func TestAdd_GitHubTreePath_ShorthandAndFullURL_ExpandSameEntry(t *testing.T) {
+	fakeHome(t, "claude-code")
+	projectRoot := t.TempDir()
+
+	fetcher := &fakeFetcher{fixtures: map[string]string{
+		"owner/nested-repo": "testdata/fixtures/nested-repo",
+	}}
+
+	if _, err := skl.Add(skl.AddOptions{
+		Source:            "owner/nested-repo/tree/main/skills/tdd",
+		Fetcher:           fetcher,
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"universal"},
+	}); err != nil {
+		t.Fatalf("first Add() (shorthand) error = %v", err)
+	}
+
+	if _, err := skl.Add(skl.AddOptions{
+		Source:            "https://github.com/owner/nested-repo/tree/main/skills/tdd",
+		Fetcher:           fetcher,
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"claude-code"},
+	}); err != nil {
+		t.Fatalf("second Add() (full URL) error = %v", err)
+	}
+
+	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
+	if err != nil {
+		t.Fatalf("ReadLockfile() error = %v", err)
+	}
+	if len(lf) != 1 {
+		t.Fatalf("len(lockfile) = %d, want 1 (expanded, not duplicated), got %v", len(lf), lf)
+	}
+	entry := lf["tdd"]
+	for _, want := range []string{"universal", "claude-code"} {
+		if _, ok := entry.Adapters[want]; !ok {
+			t.Errorf("entry.Adapters missing %q after expand, got %v", want, entry.Adapters)
+		}
+	}
+}
+
+func TestAdd_GitHubTreePath_TagOrCommitRef_IsPassedToFetcherVerbatim(t *testing.T) {
+	fakeHome(t) // universal only
+
+	tests := []struct {
+		name string
+		ref  string
+	}{
+		{"tag", "v2.1.0"},
+		{"commit SHA", "abcdef0123456789abcdef0123456789abcdef01"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			projectRoot := t.TempDir()
+			fetcher := &fakeFetcher{fixtures: map[string]string{
+				"owner/nested-repo": "testdata/fixtures/nested-repo",
+			}}
+
+			if _, err := skl.Add(skl.AddOptions{
+				Source:            "owner/nested-repo/tree/" + tt.ref + "/skills/tdd",
+				Fetcher:           fetcher,
+				ProjectRoot:       projectRoot,
+				RequestedAdapters: []string{"*"},
+			}); err != nil {
+				t.Fatalf("Add() error = %v", err)
+			}
+
+			if len(fetcher.calls) != 1 {
+				t.Fatalf("fetcher.calls = %v, want exactly 1 call", fetcher.calls)
+			}
+			if fetcher.calls[0].Ref != tt.ref {
+				t.Errorf("fetcher called with ref %q, want %q", fetcher.calls[0].Ref, tt.ref)
+			}
+		})
+	}
+}
+
+func TestAdd_GitHubTreePath_PathNotFoundInFetchedRepo_ErrorsClearly(t *testing.T) {
+	fakeHome(t) // universal only
+	projectRoot := t.TempDir()
+
+	fetcher := &fakeFetcher{fixtures: map[string]string{
+		"owner/nested-repo": "testdata/fixtures/nested-repo",
+	}}
+
+	_, err := skl.Add(skl.AddOptions{
+		Source:      "owner/nested-repo/tree/main/skills/does-not-exist",
+		Fetcher:     fetcher,
+		ProjectRoot: projectRoot,
+	})
+	if err == nil {
+		t.Fatalf("Add() error = nil, want error for a tree-path naming a nonexistent path")
+	}
+	if !contains(err.Error(), "skills/does-not-exist") {
+		t.Errorf("error %q does not name the missing path", err.Error())
+	}
+}
+
+func TestAdd_GitHubTreePath_CombinedWithRefPin_RejectedClearly(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"shorthand tree-path with pin", "owner/nested-repo/tree/main/skills/tdd@v2.1.0"},
+		{"full-URL tree-path with pin", "https://github.com/owner/nested-repo/tree/main/skills/tdd@v2.1.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			projectRoot := t.TempDir()
+
+			_, err := skl.Add(skl.AddOptions{
+				Source:      tt.src,
+				ProjectRoot: projectRoot,
+			})
+			if err == nil {
+				t.Fatalf("Add() error = nil, want a clear error rejecting the tree-path + @ref pin combination")
+			}
+			if !contains(err.Error(), "@v2.1.0") {
+				t.Errorf("error %q does not mention the offending ref pin", err.Error())
+			}
+		})
 	}
 }

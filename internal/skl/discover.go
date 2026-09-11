@@ -8,8 +8,11 @@ import (
 
 // discoverSkillDir locates the skill within a fetched source. This version
 // only supports the single-skill case: a root SKILL.md directly under
-// sourceRoot. Multi-skill discovery (skills/ walk, unbounded fallback,
-// tree-path sources) is out of scope for this ticket.
+// sourceRoot. For a GitHub tree-path source, resolveGitHubSource already
+// narrows sourceRoot to the tree-path's authoritative subdirectory before
+// this function ever runs, so no discovery walk happens there either.
+// Multi-skill discovery (skills/ walk, unbounded fallback) is out of scope
+// for this ticket.
 func discoverSkillDir(sourceRoot string) (string, error) {
 	skillMD := filepath.Join(sourceRoot, "SKILL.md")
 	info, err := os.Stat(skillMD)
