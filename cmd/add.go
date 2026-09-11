@@ -21,13 +21,13 @@ func newAddCmd() *cobra.Command {
 			}
 
 			out := cmd.OutOrStdout()
-			fmt.Fprintf(out, "Installed %s:\n", result.Name)
+			_, _ = fmt.Fprintf(out, "Installed %s:\n", result.Name)
 			for _, adapter := range skl.Adapters {
 				entry, ok := result.Adapters[adapter.Name]
 				if !ok {
 					continue
 				}
-				fmt.Fprintf(out, "  %s: %s\n", adapter.Name, entry.Path)
+				_, _ = fmt.Fprintf(out, "  %s: %s\n", adapter.Name, entry.Path)
 			}
 			return nil
 		},
