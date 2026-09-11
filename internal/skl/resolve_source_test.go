@@ -131,14 +131,14 @@ func (f *fixtureRootFetcher) Fetch(_ GitHubSource, ref string) (string, error) {
 func TestResolveSource_GitHubTreePath_PointsDirAtSkillSubdirectory(t *testing.T) {
 	fetcher := &fixtureRootFetcher{fixtureDir: "testdata/fixtures/nested-repo"}
 
-	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/skills/tdd", Fetcher: fetcher})
+	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/main/skills/tdd", Fetcher: fetcher})
 	if err != nil {
 		t.Fatalf("resolveSource() error = %v", err)
 	}
 	defer rs.Cleanup()
 
-	if fetcher.gotRef != "" {
-		t.Errorf("fetcher was called with ref %q, want empty (v1 always fetches the default branch, see #11)", fetcher.gotRef)
+	if fetcher.gotRef != "main" {
+		t.Errorf("fetcher was called with ref %q, want %q", fetcher.gotRef, "main")
 	}
 	if _, err := os.Stat(filepath.Join(rs.Dir, "SKILL.md")); err != nil {
 		t.Errorf("rs.Dir = %q does not contain SKILL.md directly, want it pointed at the skill subdirectory: %v", rs.Dir, err)
@@ -146,11 +146,14 @@ func TestResolveSource_GitHubTreePath_PointsDirAtSkillSubdirectory(t *testing.T)
 	if rs.SourceType != sourceTypeGitHub {
 		t.Errorf("rs.SourceType = %q, want %q", rs.SourceType, sourceTypeGitHub)
 	}
-	if rs.Source != "owner/nested-repo/tree/skills/tdd" {
-		t.Errorf("rs.Source = %q, want canonical %q", rs.Source, "owner/nested-repo/tree/skills/tdd")
+	if rs.Source != "owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("rs.Source = %q, want canonical %q", rs.Source, "owner/nested-repo/tree/main/skills/tdd")
 	}
-	if rs.SourceURL != "https://github.com/owner/nested-repo/tree/skills/tdd" {
-		t.Errorf("rs.SourceURL = %q, want %q", rs.SourceURL, "https://github.com/owner/nested-repo/tree/skills/tdd")
+	if rs.SourceURL != "https://github.com/owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("rs.SourceURL = %q, want %q", rs.SourceURL, "https://github.com/owner/nested-repo/tree/main/skills/tdd")
+	}
+	if rs.Ref != "main" {
+		t.Errorf("rs.Ref = %q, want %q", rs.Ref, "main")
 	}
 	if rs.SkillPath != "skills/tdd" {
 		t.Errorf("rs.SkillPath = %q, want %q", rs.SkillPath, "skills/tdd")
@@ -166,7 +169,7 @@ func TestResolveSource_GitHubTreePath_PointsDirAtSkillSubdirectory(t *testing.T)
 func TestResolveSource_GitHubTreePath_CleanupRemovesEntireFetchedRoot(t *testing.T) {
 	fetcher := &fixtureRootFetcher{fixtureDir: "testdata/fixtures/nested-repo"}
 
-	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/skills/tdd", Fetcher: fetcher})
+	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/main/skills/tdd", Fetcher: fetcher})
 	if err != nil {
 		t.Fatalf("resolveSource() error = %v", err)
 	}
@@ -186,7 +189,7 @@ func TestResolveSource_GitHubTreePath_CleanupRemovesEntireFetchedRoot(t *testing
 func TestResolveSource_GitHubTreePath_PathNotFound_ErrorsClearly(t *testing.T) {
 	fetcher := &fixtureRootFetcher{fixtureDir: "testdata/fixtures/nested-repo"}
 
-	_, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/skills/does-not-exist", Fetcher: fetcher})
+	_, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/main/skills/does-not-exist", Fetcher: fetcher})
 	if err == nil {
 		t.Fatal("resolveSource() error = nil, want error for a tree-path naming a path that doesn't exist in the fetched repository")
 	}
@@ -198,7 +201,7 @@ func TestResolveSource_GitHubTreePath_PathNotFound_ErrorsClearly(t *testing.T) {
 func TestResolveSource_GitHubTreePath_PathExistsButNotASkill_ErrorsFromDiscovery(t *testing.T) {
 	fetcher := &fixtureRootFetcher{fixtureDir: "testdata/fixtures/nested-repo"}
 
-	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/docs", Fetcher: fetcher})
+	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo/tree/main/docs", Fetcher: fetcher})
 	if err != nil {
 		t.Fatalf("resolveSource() error = %v, want resolveSource to succeed (the path exists) and let discoverSkillDir report the missing SKILL.md", err)
 	}
