@@ -10,12 +10,14 @@ import (
 // newAddCmd wires the "add" command's flags and arguments to
 // internal/skl.Add. It contains no business logic of its own.
 func newAddCmd() *cobra.Command {
+	var agents []string
+
 	cmd := &cobra.Command{
 		Use:   "add <source>",
 		Short: "Install a skill from a source",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			result, err := skl.Add(skl.AddOptions{Source: args[0]})
+			result, err := skl.Add(skl.AddOptions{Source: args[0], RequestedAdapters: agents})
 			if err != nil {
 				return err
 			}
@@ -32,6 +34,8 @@ func newAddCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringSliceVarP(&agents, "agent", "a", nil, "adapter(s) to install for: comma-separated and/or repeated, supports \"*\" for all detected adapters (default: universal plus the detected adapter, if exactly one is detected)")
 
 	return cmd
 }

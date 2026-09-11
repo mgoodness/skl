@@ -10,11 +10,13 @@ import (
 )
 
 func TestAdd_LocalSingleSkill_CopiesIntoAllThreeAdapterDestinations(t *testing.T) {
+	fakeHome(t, "claude-code", "kit")
 	projectRoot := t.TempDir()
 
 	result, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/simple-skill",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/simple-skill",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	})
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
@@ -56,11 +58,13 @@ func TestAdd_LocalSingleSkill_CopiesIntoAllThreeAdapterDestinations(t *testing.T
 }
 
 func TestAdd_LocalSingleSkill_WritesLockfileEntry(t *testing.T) {
+	fakeHome(t, "claude-code", "kit")
 	projectRoot := t.TempDir()
 
 	if _, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/simple-skill",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/simple-skill",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	}); err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
@@ -131,17 +135,20 @@ func TestAdd_LocalSingleSkill_WritesLockfileEntry(t *testing.T) {
 }
 
 func TestAdd_LockfileEntriesAreAlphabetizedBySkillName(t *testing.T) {
+	fakeHome(t, "claude-code", "kit")
 	projectRoot := t.TempDir()
 
 	if _, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/simple-skill",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/simple-skill",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	}); err != nil {
 		t.Fatalf("Add() simple-skill error = %v", err)
 	}
 	if _, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/skill-with-resource",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/skill-with-resource",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	}); err != nil {
 		t.Fatalf("Add() skill-with-resource error = %v", err)
 	}
@@ -198,11 +205,13 @@ func TestAdd_InvalidSource_Errors(t *testing.T) {
 }
 
 func TestAdd_CopiesNestedResourceFiles(t *testing.T) {
+	fakeHome(t, "claude-code", "kit")
 	projectRoot := t.TempDir()
 
 	result, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/skill-with-resource",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/skill-with-resource",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	})
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
@@ -225,19 +234,22 @@ func TestAdd_CopiesNestedResourceFiles(t *testing.T) {
 }
 
 func TestAdd_DifferentSkillsHaveDifferentContentHashes(t *testing.T) {
+	fakeHome(t, "claude-code", "kit")
 	projectRootA := t.TempDir()
 	projectRootB := t.TempDir()
 
 	resultA, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/simple-skill",
-		ProjectRoot: projectRootA,
+		Source:            "testdata/fixtures/simple-skill",
+		ProjectRoot:       projectRootA,
+		RequestedAdapters: []string{"*"},
 	})
 	if err != nil {
 		t.Fatalf("Add() simple-skill error = %v", err)
 	}
 	resultB, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/skill-with-resource",
-		ProjectRoot: projectRootB,
+		Source:            "testdata/fixtures/skill-with-resource",
+		ProjectRoot:       projectRootB,
+		RequestedAdapters: []string{"*"},
 	})
 	if err != nil {
 		t.Fatalf("Add() skill-with-resource error = %v", err)
@@ -255,17 +267,20 @@ func TestAdd_DifferentSkillsHaveDifferentContentHashes(t *testing.T) {
 }
 
 func TestAdd_ReAddingSameSkill_UpdatesEntryWithoutDuplicating(t *testing.T) {
+	fakeHome(t, "claude-code", "kit")
 	projectRoot := t.TempDir()
 
 	if _, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/simple-skill",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/simple-skill",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	}); err != nil {
 		t.Fatalf("first Add() error = %v", err)
 	}
 	if _, err := skl.Add(skl.AddOptions{
-		Source:      "testdata/fixtures/simple-skill",
-		ProjectRoot: projectRoot,
+		Source:            "testdata/fixtures/simple-skill",
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
 	}); err != nil {
 		t.Fatalf("second Add() error = %v", err)
 	}

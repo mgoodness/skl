@@ -10,8 +10,26 @@ import (
 	"github.com/mgoodness/skl/cmd"
 )
 
-func TestAddCommand_InstallsLocalSkillIntoProjectRoot(t *testing.T) {
-	projectRoot := t.TempDir()
+// setUpFakeProject fakes $HOME/$XDG_CONFIG_HOME with markers for every
+// adapter, chdirs into a fresh project root, and writes a minimal
+// single-skill fixture at ./my-skill, returning the project root. This
+// keeps every test's expectations independent of what's actually installed
+// on the machine running it.
+func setUpFakeProject(t *testing.T) (projectRoot string) {
+	t.Helper()
+
+	home := t.TempDir()
+	configHome := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+		t.Fatalf("creating fake ~/.claude: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(configHome, "kit"), 0o755); err != nil {
+		t.Fatalf("creating fake $XDG_CONFIG_HOME/kit: %v", err)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+
+	projectRoot = t.TempDir()
 	t.Chdir(projectRoot)
 
 	fixture := filepath.Join(projectRoot, "my-skill")
@@ -22,11 +40,17 @@ func TestAddCommand_InstallsLocalSkillIntoProjectRoot(t *testing.T) {
 		t.Fatalf("writing fixture SKILL.md: %v", err)
 	}
 
+	return projectRoot
+}
+
+func TestAddCommand_InstallsLocalSkillIntoProjectRoot(t *testing.T) {
+	projectRoot := setUpFakeProject(t)
+
 	buf := new(bytes.Buffer)
 	root := cmd.NewRootCmd()
 	root.SetOut(buf)
 	root.SetErr(buf)
-	root.SetArgs([]string{"add", "./my-skill"})
+	root.SetArgs([]string{"add", "./my-skill", "--agent", "*"})
 
 	if err := root.ExecuteContext(t.Context()); err != nil {
 		t.Fatalf("Execute() error = %v, output: %s", err, buf.String())
@@ -60,5 +84,19 @@ func TestAddCommand_MissingSourceArgument_Errors(t *testing.T) {
 
 	if err := root.ExecuteContext(t.Context()); err == nil {
 		t.Fatal("Execute() error = nil, want error for missing <source> argument")
+	}
+}
+
+func TestAddCommand_UnknownAgentFlag_Errors(t *testing.T) {
+	setUpFakeProject(t)
+
+	buf := new(bytes.Buffer)
+	root := cmd.NewRootCmd()
+	root.SetOut(buf)
+	root.SetErr(buf)
+	root.SetArgs([]string{"add", "./my-skill", "--agent", "not-a-real-adapter"})
+
+	if err := root.ExecuteContext(t.Context()); err == nil {
+		t.Fatal("Execute() error = nil, want error for unknown --agent value")
 	}
 }
