@@ -145,13 +145,13 @@ func TestParseSource_GitHubTreePath_InvalidPathSegments_Errors(t *testing.T) {
 	}
 }
 
-func TestParseSource_GitHubTreePath_CombinedWithRefFragment_Errors(t *testing.T) {
+func TestParseSource_GitHubTreePath_CombinedWithRefPin_Errors(t *testing.T) {
 	tests := []struct {
 		name string
 		src  string
 	}{
-		{"shorthand tree-path with fragment", "owner/repo/tree/main/skills/tdd#v2.1.0"},
-		{"full-URL tree-path with fragment", "https://github.com/owner/repo/tree/main/skills/tdd#v2.1.0"},
+		{"shorthand tree-path with pin", "owner/repo/tree/main/skills/tdd@v2.1.0"},
+		{"full-URL tree-path with pin", "https://github.com/owner/repo/tree/main/skills/tdd@v2.1.0"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -159,8 +159,8 @@ func TestParseSource_GitHubTreePath_CombinedWithRefFragment_Errors(t *testing.T)
 			if err == nil {
 				t.Fatalf("parseSource(%q) error = nil, want a clear error rejecting the combination", tt.src)
 			}
-			if !strings.Contains(err.Error(), "#v2.1.0") {
-				t.Errorf("error %q does not mention the offending fragment", err.Error())
+			if !strings.Contains(err.Error(), "@v2.1.0") {
+				t.Errorf("error %q does not mention the offending ref pin", err.Error())
 			}
 		})
 	}

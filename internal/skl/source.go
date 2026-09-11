@@ -84,7 +84,7 @@ var (
 	// githubTreePathPattern matches a GitHub tree-path source in
 	// shorthand form: owner/repo/tree/<ref>/<path>. <ref> is everything
 	// up to the next "/" and <path> is everything after it — the same
-	// deterministic, no-ambiguity-resolution grammar #11's "#ref/<path>"
+	// deterministic, no-ambiguity-resolution grammar #11's "@ref/<path>"
 	// shorthand uses, and for the same reason: without querying GitHub's
 	// API we have no way to know which branches exist, so a ref
 	// containing "/" (e.g. "feature/foo") isn't reachable through this
@@ -99,18 +99,18 @@ var (
 
 // parseSource classifies raw as either a GitHub source (shorthand, full
 // URL, or tree-path) or a local filesystem path, based on syntax alone —
-// no filesystem or network access happens here. A #ref fragment (see #11)
-// is out of this ticket's scope for non-tree-path sources: a source using
+// no filesystem or network access happens here. An @ref pin (see #11) is
+// out of this ticket's scope for non-tree-path sources: a source using
 // that syntax doesn't match any GitHub pattern below and falls through to
 // local-path handling, whose existing stat-based error makes clear the
 // string wasn't found as a directory either. Combining a tree-path source
-// with a #ref fragment is rejected outright, since the tree-path already
+// with an @ref pin is rejected outright, since the tree-path already
 // encodes a ref.
 func parseSource(raw string) (parsedSource, error) {
-	if base, frag, cut := strings.Cut(raw, "#"); cut && isGitHubTreePath(base) {
+	if base, pin, cut := strings.Cut(raw, "@"); cut && isGitHubTreePath(base) {
 		return parsedSource{}, fmt.Errorf(
-			"source %q combines a GitHub tree-path URL with a #%s fragment: the tree-path already encodes a ref; remove the \"#%s\" fragment",
-			raw, frag, frag,
+			"source %q combines a GitHub tree-path URL with an @%s ref pin: the tree-path already encodes a ref; remove the \"@%s\" pin",
+			raw, pin, pin,
 		)
 	}
 

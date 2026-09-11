@@ -84,10 +84,10 @@ type AddOptions struct {
 	// ("https://github.com/owner/repo"), or a GitHub tree-path URL
 	// ("owner/repo/tree/<ref>/<path>", or the equivalent full
 	// "https://github.com/owner/repo/tree/<ref>/<path>") naming a ref and
-	// a repo-relative path to install the skill from directly. #ref
-	// fragment pinning on a non-tree-path source is not yet supported (see
-	// #11); a non-tree-path GitHub source is always fetched at its default
-	// branch and must contain a root SKILL.md.
+	// a repo-relative path to install the skill from directly. @ref pinning
+	// on a non-tree-path source is not yet supported (see #11); a
+	// non-tree-path GitHub source is always fetched at its default branch
+	// and must contain a root SKILL.md.
 	Source string
 	// Fetcher fetches a GitHub source's contents into a local directory. A
 	// nil Fetcher (the default) uses GitHubFetcher, which performs a real

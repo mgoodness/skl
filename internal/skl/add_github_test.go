@@ -120,7 +120,7 @@ func TestAdd_GitHubShorthand_FetchesAndInstalls(t *testing.T) {
 		t.Errorf("fetcher called with %+v, want Owner=%q Repo=%q", call.Source, "owner", "simple-skill")
 	}
 	if call.Ref != "" {
-		t.Errorf("fetcher called with ref %q, want empty (default branch) — #ref pinning is out of this ticket's scope", call.Ref)
+		t.Errorf("fetcher called with ref %q, want empty (default branch) — @ref pinning is out of this ticket's scope", call.Ref)
 	}
 }
 
@@ -543,13 +543,13 @@ func TestAdd_GitHubTreePath_PathNotFoundInFetchedRepo_ErrorsClearly(t *testing.T
 	}
 }
 
-func TestAdd_GitHubTreePath_CombinedWithRefFragment_RejectedClearly(t *testing.T) {
+func TestAdd_GitHubTreePath_CombinedWithRefPin_RejectedClearly(t *testing.T) {
 	tests := []struct {
 		name string
 		src  string
 	}{
-		{"shorthand tree-path with fragment", "owner/nested-repo/tree/main/skills/tdd#v2.1.0"},
-		{"full-URL tree-path with fragment", "https://github.com/owner/nested-repo/tree/main/skills/tdd#v2.1.0"},
+		{"shorthand tree-path with pin", "owner/nested-repo/tree/main/skills/tdd@v2.1.0"},
+		{"full-URL tree-path with pin", "https://github.com/owner/nested-repo/tree/main/skills/tdd@v2.1.0"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -560,10 +560,10 @@ func TestAdd_GitHubTreePath_CombinedWithRefFragment_RejectedClearly(t *testing.T
 				ProjectRoot: projectRoot,
 			})
 			if err == nil {
-				t.Fatalf("Add() error = nil, want a clear error rejecting the tree-path + #ref fragment combination")
+				t.Fatalf("Add() error = nil, want a clear error rejecting the tree-path + @ref pin combination")
 			}
-			if !contains(err.Error(), "#v2.1.0") {
-				t.Errorf("error %q does not mention the offending fragment", err.Error())
+			if !contains(err.Error(), "@v2.1.0") {
+				t.Errorf("error %q does not mention the offending ref pin", err.Error())
 			}
 		})
 	}
