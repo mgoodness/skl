@@ -19,9 +19,13 @@ type AdapterEntry struct {
 // matched by Source, not by name alone (see ADR-0003 and CONTEXT.md's
 // "Expand"/"Conflict" definitions).
 type LockEntry struct {
-	Source      string                  `json:"source"`
-	SourceType  string                  `json:"sourceType"`
-	SourceURL   string                  `json:"sourceUrl,omitempty"`
+	Source     string `json:"source"`
+	SourceType string `json:"sourceType"`
+	SourceURL  string `json:"sourceUrl,omitempty"`
+	// Ref is reserved for future ref-pinning support (see #11, deferred
+	// past v1): every GitHub source in v1, tree-path sources included, is
+	// always installed from the repository's default branch, so this
+	// field is always left unset for now.
 	Ref         string                  `json:"ref,omitempty"`
 	SkillPath   string                  `json:"skillPath"`
 	ContentHash string                  `json:"contentHash"`

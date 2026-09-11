@@ -82,12 +82,13 @@ type AddOptions struct {
 	// Source is where the skill is fetched from: a local filesystem path,
 	// a GitHub shorthand ("owner/repo"), a full GitHub URL
 	// ("https://github.com/owner/repo"), or a GitHub tree-path URL
-	// ("owner/repo/tree/<ref>/<path>", or the equivalent full
-	// "https://github.com/owner/repo/tree/<ref>/<path>") naming a ref and
-	// a repo-relative path to install the skill from directly. #ref
-	// fragment pinning on a non-tree-path source is not yet supported (see
-	// #11); a non-tree-path GitHub source is always fetched at its default
-	// branch and must contain a root SKILL.md.
+	// ("owner/repo/tree/<path>", or the equivalent full
+	// "https://github.com/owner/repo/tree/<path>") naming a repo-relative
+	// path to install the skill from directly. v1 has no ref-pinning
+	// concept at all (see #11, deferred to a future version): every
+	// GitHub source, tree-path included, is always fetched at the
+	// repository's default branch and must contain a root SKILL.md (at
+	// the source's own root, or at the tree-path's named path).
 	Source string
 	// Fetcher fetches a GitHub source's contents into a local directory. A
 	// nil Fetcher (the default) uses GitHubFetcher, which performs a real
@@ -310,7 +311,6 @@ func Add(opts AddOptions) (*AddResult, error) {
 			Source:      rs.Source,
 			SourceType:  rs.SourceType,
 			SourceURL:   rs.SourceURL,
-			Ref:         rs.Ref,
 			SkillPath:   rs.SkillPath,
 			ContentHash: contentHash,
 			Adapters:    adapterEntries,
