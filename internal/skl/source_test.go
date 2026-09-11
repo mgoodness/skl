@@ -166,6 +166,119 @@ func TestParseSource_GitHubTreePath_CombinedWithRefPin_Errors(t *testing.T) {
 	}
 }
 
+func TestParseSource_GitHubRefPin_Bare(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"shorthand, tag ref", "owner/repo@v2.1.0"},
+		{"full URL, tag ref", "https://github.com/owner/repo@v2.1.0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSource(tt.src)
+			if err != nil {
+				t.Fatalf("parseSource() error = %v", err)
+			}
+			if got.Kind != sourceKindGitHub {
+				t.Fatalf("Kind = %v, want sourceKindGitHub", got.Kind)
+			}
+			if got.GitHub.Owner != "owner" || got.GitHub.Repo != "repo" {
+				t.Errorf("GitHub = %+v, want Owner=%q Repo=%q", got.GitHub, "owner", "repo")
+			}
+			if got.Ref != "v2.1.0" {
+				t.Errorf("Ref = %q, want %q", got.Ref, "v2.1.0")
+			}
+			if got.Path != "" {
+				t.Errorf("Path = %q, want empty for a bare @ref pin", got.Path)
+			}
+		})
+	}
+}
+
+func TestParseSource_GitHubRefPin_WithPathShorthand(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		ref  string
+		path string
+	}{
+		{"shorthand, nested path", "owner/repo@main/skills/tdd", "main", "skills/tdd"},
+		{"full URL, nested path", "https://github.com/owner/repo@main/skills/tdd", "main", "skills/tdd"},
+		{"shorthand, single-segment path", "owner/repo@main/tdd", "main", "tdd"},
+		{"shorthand, commit SHA ref", "owner/repo@abcdef0123456789/skills/tdd", "abcdef0123456789", "skills/tdd"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseSource(tt.src)
+			if err != nil {
+				t.Fatalf("parseSource() error = %v", err)
+			}
+			if got.Kind != sourceKindGitHub {
+				t.Fatalf("Kind = %v, want sourceKindGitHub", got.Kind)
+			}
+			if got.GitHub.Owner != "owner" || got.GitHub.Repo != "repo" {
+				t.Errorf("GitHub = %+v, want Owner=%q Repo=%q", got.GitHub, "owner", "repo")
+			}
+			if got.Ref != tt.ref {
+				t.Errorf("Ref = %q, want %q", got.Ref, tt.ref)
+			}
+			if got.Path != tt.path {
+				t.Errorf("Path = %q, want %q", got.Path, tt.path)
+			}
+		})
+	}
+}
+
+// TestParseSource_GitHubRefPin_RefContainingSlash_IsADocumentedLimitation
+// asserts the @ref/<path> grammar's fixed, deterministic behavior: since
+// everything up to the first "/" after "@" is taken as the ref, a ref that
+// itself contains "/" (e.g. a "feature/foo" branch) is not reachable
+// through this shorthand -- "feature" is parsed as the ref and "foo" as
+// the path, with no fallback or ambiguity resolution attempted. This is a
+// documented limitation, not a bug.
+func TestParseSource_GitHubRefPin_RefContainingSlash_IsADocumentedLimitation(t *testing.T) {
+	got, err := parseSource("owner/repo@feature/foo")
+	if err != nil {
+		t.Fatalf("parseSource() error = %v", err)
+	}
+	if got.Ref != "feature" {
+		t.Errorf("Ref = %q, want %q (everything up to the first slash after @)", got.Ref, "feature")
+	}
+	if got.Path != "foo" {
+		t.Errorf("Path = %q, want %q (everything after the first slash)", got.Path, "foo")
+	}
+}
+
+func TestParseSource_GitHubRefPin_CombinedWithLocalPath_Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"relative local path with ref pin", "testdata/fixtures/simple-skill@v1"},
+		{"single-segment local path with ref pin", "just-a-name@v1"},
+		{"leading-dot local path with ref pin", "./simple-skill@v1"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSource(tt.src)
+			if err == nil {
+				t.Fatalf("parseSource(%q) error = nil, want a clear error rejecting the combination", tt.src)
+			}
+			if !strings.Contains(err.Error(), "@v1") {
+				t.Errorf("error %q does not mention the offending ref pin", err.Error())
+			}
+		})
+	}
+}
+
+func TestParseSource_GitHubRefPin_EmptyPin_Errors(t *testing.T) {
+	_, err := parseSource("owner/repo@")
+	if err == nil {
+		t.Fatal("parseSource() error = nil, want error for an empty @ ref pin")
+	}
+}
+
 func TestGitHubSource_StringAndURL(t *testing.T) {
 	src := GitHubSource{Owner: "owner", Repo: "repo"}
 	if got := src.String(); got != "owner/repo" {

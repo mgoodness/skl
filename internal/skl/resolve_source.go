@@ -59,8 +59,8 @@ type resolvedSource struct {
 // resolveSource classifies opts.Source and turns it into a resolvedSource:
 // a GitHub source is fetched (via opts.Fetcher, defaulting to
 // GitHubFetcher) at its default branch, or at the ref a tree-path source
-// names; a local source is validated as an existing directory. Local-path
-// sources bypass the Fetcher entirely.
+// or an @ref pin (see #11) names; a local source is validated as an
+// existing directory. Local-path sources bypass the Fetcher entirely.
 func resolveSource(opts AddOptions) (resolvedSource, error) {
 	parsed, err := parseSource(opts.Source)
 	if err != nil {
@@ -75,7 +75,8 @@ func resolveSource(opts AddOptions) (resolvedSource, error) {
 // resolveGitHubSource fetches parsed.GitHub at parsed.Ref (empty meaning
 // the source's default branch) via opts.Fetcher (defaulting to
 // GitHubFetcher) and describes the result as a resolvedSource. When
-// parsed.Path is set (a tree-path source), Dir is pointed directly at that
+// parsed.Path is set (a tree-path source, or a shorthand/full-URL source
+// pinned via #11's @ref/<path> syntax), Dir is pointed directly at that
 // subdirectory within the fetched repository — the path is authoritative,
 // so no discovery walk happens.
 func resolveGitHubSource(opts AddOptions, parsed parsedSource) (resolvedSource, error) {
@@ -96,9 +97,10 @@ func resolveGitHubSource(opts AddOptions, parsed parsedSource) (resolvedSource, 
 			Dir:           dir,
 			Cleanup:       cleanup,
 			SuggestedName: src.Repo,
-			Source:        src.String(),
+			Source:        pinnedIdentity(src.String(), parsed.Ref),
 			SourceType:    sourceTypeGitHub,
-			SourceURL:     src.URL(),
+			SourceURL:     pinnedIdentity(src.URL(), parsed.Ref),
+			Ref:           parsed.Ref,
 			SkillPath:     ".",
 		}, nil
 	}
@@ -126,6 +128,21 @@ func resolveGitHubSource(opts AddOptions, parsed parsedSource) (resolvedSource, 
 // for both Source and SourceURL.
 func treePathOf(base, ref, path string) string {
 	return fmt.Sprintf("%s/tree/%s/%s", base, ref, path)
+}
+
+// pinnedIdentity appends a bare @ref pin (no path) onto base, producing
+// the canonical "owner/repo@<ref>" (or full-URL equivalent) identity
+// resolveGitHubSource records for a shorthand/full-URL source pinned via
+// #11's @ref syntax — so pinning to a different ref is tracked as a
+// different source (see ADR-0003's conflict/expand identity), and re-add
+// with the same ref expands the existing entry regardless of whether it
+// was reached via shorthand or full URL. Returns base unchanged when ref
+// is empty, the plain unpinned case.
+func pinnedIdentity(base, ref string) string {
+	if ref == "" {
+		return base
+	}
+	return base + "@" + ref
 }
 
 // resolveLocalSource validates opts.Source as an existing local directory
