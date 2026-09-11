@@ -131,6 +131,14 @@ func TestAdd_SameNameDifferentSource_ForceReplacesEntry(t *testing.T) {
 	if !contains(entry.Source, "conflict-source-b") {
 		t.Errorf("entry.Source = %q, want it replaced with the new (forced) source", entry.Source)
 	}
+	if _, ok := entry.Adapters["universal"]; ok {
+		t.Errorf("entry.Adapters still tracks %q from the replaced source, want it dropped, got %v", "universal", entry.Adapters)
+	}
+
+	oldDest := filepath.Join(projectRoot, ".agents", "skills", "simple-skill")
+	if _, err := os.Stat(oldDest); !os.IsNotExist(err) {
+		t.Errorf("expected orphaned old destination %s to be removed, stat err = %v", oldDest, err)
+	}
 
 	installed := filepath.Join(projectRoot, ".kit", "skills", "simple-skill", "SKILL.md")
 	data, err := os.ReadFile(installed)

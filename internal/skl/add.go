@@ -130,7 +130,10 @@ type AddResult struct {
 //     expanded with the newly targeted adapter(s) rather than duplicated.
 //   - Same name, different source: a conflict, refused unless opts.Force
 //     is set, in which case the entry's source/metadata is replaced
-//     entirely and only the adapters targeted by this call are recorded.
+//     entirely, only the adapters targeted by this call are recorded, and
+//     any destination the old entry tracked for an adapter this call
+//     doesn't target is removed from disk (it would otherwise be an
+//     orphaned, untracked install).
 //
 // Independently, each targeted adapter's destination is checked for a
 // collision: an existing, non-empty directory not already tracked by this
@@ -192,6 +195,30 @@ func Add(opts AddOptions) (*AddResult, error) {
 	conflict := hasEntry && existing.Source != opts.Source
 	if conflict && !opts.Force {
 		return nil, fmt.Errorf("skill %q is already installed from a different source %q; refusing to overwrite (use --force to replace it)", name, existing.Source)
+	}
+
+	if conflict && opts.Force {
+		// Fully replacing a conflicting entry: any adapter destination
+		// tracked under the old source but not re-targeted by this call
+		// would otherwise be left on disk holding stale content the
+		// lockfile no longer references. Remove those so the lockfile stays
+		// the single accurate record of what's installed.
+		targetSet := make(map[string]bool, len(targetNames))
+		for _, t := range targetNames {
+			targetSet[t] = true
+		}
+		for adapterName, entry := range existing.Adapters {
+			if targetSet[adapterName] {
+				continue
+			}
+			stalePath := entry.Path
+			if !opts.Global {
+				stalePath = filepath.Join(projectRoot, filepath.FromSlash(entry.Path))
+			}
+			if err := os.RemoveAll(stalePath); err != nil {
+				return nil, fmt.Errorf("removing stale destination %q for adapter %q: %w", stalePath, adapterName, err)
+			}
+		}
 	}
 
 	// alreadyTracked holds the adapters this exact name+source is already
