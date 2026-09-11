@@ -89,11 +89,12 @@ func resolveGitHubSource(opts AddOptions, parsed parsedSource) (resolvedSource, 
 	if err != nil {
 		return resolvedSource{}, fmt.Errorf("fetching %s: %w", src, err)
 	}
+	cleanup := func() { _ = os.RemoveAll(dir) }
 
 	if parsed.Path == "" {
 		return resolvedSource{
 			Dir:           dir,
-			Cleanup:       func() { _ = os.RemoveAll(dir) },
+			Cleanup:       cleanup,
 			SuggestedName: src.Repo,
 			Source:        src.String(),
 			SourceType:    sourceTypeGitHub,
@@ -110,13 +111,21 @@ func resolveGitHubSource(opts AddOptions, parsed parsedSource) (resolvedSource, 
 
 	return resolvedSource{
 		Dir:        skillDir,
-		Cleanup:    func() { _ = os.RemoveAll(dir) },
-		Source:     fmt.Sprintf("%s/tree/%s/%s", src.String(), parsed.Ref, parsed.Path),
+		Cleanup:    cleanup,
+		Source:     treePathOf(src.String(), parsed.Ref, parsed.Path),
 		SourceType: sourceTypeGitHub,
-		SourceURL:  fmt.Sprintf("%s/tree/%s/%s", src.URL(), parsed.Ref, parsed.Path),
+		SourceURL:  treePathOf(src.URL(), parsed.Ref, parsed.Path),
 		Ref:        parsed.Ref,
 		SkillPath:  parsed.Path,
 	}, nil
+}
+
+// treePathOf appends a tree-path source's ref and path onto base (either a
+// GitHubSource's canonical "owner/repo" form or its full URL), producing
+// the canonical "…/tree/<ref>/<path>" identity resolveGitHubSource records
+// for both Source and SourceURL.
+func treePathOf(base, ref, path string) string {
+	return fmt.Sprintf("%s/tree/%s/%s", base, ref, path)
 }
 
 // resolveLocalSource validates opts.Source as an existing local directory
