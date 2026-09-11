@@ -9,6 +9,7 @@ See [CONTEXT.md](CONTEXT.md) for the project's glossary and `docs/adr/` for its 
 v1.0 is under active development, tracked as [GitHub issues](https://github.com/mgoodness/skl/issues) under #1. Currently implemented:
 
 - `skl add <local-path>`: installs a skill from a local directory containing a root `SKILL.md` into all three adapters' project destinations (`.claude/skills/`, `.kit/skills/`, `.agents/skills/`), recording the install in `.skl-lock.json`.
+- `skl add --global <local-path>`: installs into each adapter's global destination (`~/.claude/skills/`, `~/.config/kit/skills/`, `~/.agents/skills/`) instead, recording the install in the global lockfile at `$XDG_DATA_HOME/skl/lock.json` (falling back to `~/.local/share/skl/lock.json`).
 
 ## Build
 
@@ -20,6 +21,7 @@ go build -o skl .
 
 ```console
 skl add ./path/to/some-skill
+skl add --global ./path/to/some-skill
 ```
 
 ## Releasing

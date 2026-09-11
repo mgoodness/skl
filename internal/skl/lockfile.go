@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // AdapterEntry is a lockfile entry's record of one adapter's install
-// destination.
+// destination: project-root-relative in project scope, or the absolute
+// global destination path in global scope (see internal/skl.Add's
+// resolveDestination).
 type AdapterEntry struct {
 	Path string `json:"path"`
 }
@@ -56,7 +59,11 @@ func ReadLockfile(path string) (Lockfile, error) {
 	return lf, nil
 }
 
-// WriteLockfile writes lf to path as indented JSON with a trailing newline.
+// WriteLockfile writes lf to path as indented JSON with a trailing newline,
+// creating path's parent directory if it doesn't already exist (needed for
+// the global lockfile, whose $XDG_DATA_HOME/skl directory may not exist
+// yet; the project lockfile's parent, the project root, always already
+// exists).
 func WriteLockfile(path string, lf Lockfile) error {
 	data, err := json.MarshalIndent(lf, "", "  ")
 	if err != nil {
@@ -64,6 +71,9 @@ func WriteLockfile(path string, lf Lockfile) error {
 	}
 	data = append(data, '\n')
 
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("creating directory for %s: %w", path, err)
+	}
 	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}

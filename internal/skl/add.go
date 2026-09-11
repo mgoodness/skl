@@ -37,6 +37,36 @@ var Adapters = []Adapter{
 	{Name: UniversalAdapter, ProjectDir: filepath.Join(".agents", "skills")},
 }
 
+// resolveLockPath returns the lockfile path Add should read from and write
+// to: the global lockfile (see globalLockfilePath) when global is true,
+// else the project-scoped .skl-lock.json at projectRoot's root.
+func resolveLockPath(projectRoot string, global bool) (string, error) {
+	if global {
+		return globalLockfilePath()
+	}
+	return filepath.Join(projectRoot, ".skl-lock.json"), nil
+}
+
+// resolveDestination returns where a skill named name should be installed
+// on disk for adapter, and the corresponding AdapterEntry.Path to record
+// in the lockfile. In project scope, dest is projectRoot-rooted and Path
+// is root-relative (e.g. ".claude/skills/<name>"), matching resolveLockPath's
+// project-scoped branch. In global scope, dest is adapter's global
+// directory (see globalAdapterDir) and Path is that same absolute path,
+// since global installs have no shared root to make it relative to.
+func resolveDestination(adapter Adapter, name, projectRoot string, global bool) (dest, entryPath string, err error) {
+	if global {
+		globalDir, err := globalAdapterDir(adapter.Name)
+		if err != nil {
+			return "", "", fmt.Errorf("resolving global destination for adapter %q: %w", adapter.Name, err)
+		}
+		dest = filepath.Join(globalDir, name)
+		return dest, dest, nil
+	}
+	relDest := filepath.Join(adapter.ProjectDir, name)
+	return filepath.Join(projectRoot, relDest), relDest, nil
+}
+
 // adapterByName looks up an Adapter by name within Adapters.
 func adapterByName(name string) (Adapter, bool) {
 	for _, a := range Adapters {
@@ -61,15 +91,22 @@ type AddOptions struct {
 	// literal "*". Empty means no --agent was given, triggering the
 	// detected-adapter default heuristic. See ResolveAdapters.
 	RequestedAdapters []string
+	// Global selects global scope: each adapter's global destination
+	// directory (e.g. ~/.claude/skills/<name>) and the global lockfile
+	// (see globalLockfilePath) instead of the project-scoped equivalents.
+	// ProjectRoot is ignored when true.
+	Global bool
 }
 
 // AddResult describes the outcome of a successful Add call.
 type AddResult struct {
 	// Name is the installed skill's name (its destination directory name).
 	Name string
-	// Adapters maps each adapter name Add installed to to its
-	// project-relative destination. Shares AdapterEntry with LockEntry
-	// since both describe the same "adapter name -> destination" fact.
+	// Adapters maps each adapter name Add installed to to its destination:
+	// project-root-relative in project scope, or the absolute global
+	// destination path in global scope (see resolveDestination). Shares
+	// AdapterEntry with LockEntry since both describe the same "adapter
+	// name -> destination" fact.
 	Adapters map[string]AdapterEntry
 }
 
@@ -84,7 +121,7 @@ func Add(opts AddOptions) (*AddResult, error) {
 	}
 
 	projectRoot := opts.ProjectRoot
-	if projectRoot == "" {
+	if !opts.Global && projectRoot == "" {
 		wd, err := os.Getwd()
 		if err != nil {
 			return nil, fmt.Errorf("determining project root: %w", err)
@@ -127,15 +164,21 @@ func Add(opts AddOptions) (*AddResult, error) {
 		if !ok {
 			return nil, fmt.Errorf("internal error: resolved unknown adapter %q", targetName)
 		}
-		relDest := filepath.Join(adapter.ProjectDir, name)
-		dest := filepath.Join(projectRoot, relDest)
+
+		dest, entryPath, err := resolveDestination(adapter, name, projectRoot, opts.Global)
+		if err != nil {
+			return nil, err
+		}
 		if err := writeFiles(files, dest); err != nil {
 			return nil, fmt.Errorf("installing %q for adapter %q: %w", name, adapter.Name, err)
 		}
-		adapterEntries[adapter.Name] = AdapterEntry{Path: filepath.ToSlash(relDest)}
+		adapterEntries[adapter.Name] = AdapterEntry{Path: filepath.ToSlash(entryPath)}
 	}
 
-	lockPath := filepath.Join(projectRoot, ".skl-lock.json")
+	lockPath, err := resolveLockPath(projectRoot, opts.Global)
+	if err != nil {
+		return nil, fmt.Errorf("resolving lockfile path: %w", err)
+	}
 	lf, err := ReadLockfile(lockPath)
 	if err != nil {
 		return nil, fmt.Errorf("reading lockfile: %w", err)
