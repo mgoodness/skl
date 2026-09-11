@@ -79,9 +79,19 @@ func adapterByName(name string) (Adapter, bool) {
 
 // AddOptions configures a call to Add.
 type AddOptions struct {
-	// Source is where the skill is fetched from. In this ticket's scope,
-	// only a local filesystem path is supported.
+	// Source is where the skill is fetched from: a local filesystem path,
+	// a GitHub shorthand ("owner/repo"), or a full GitHub URL
+	// ("https://github.com/owner/repo"). GitHub tree-path URLs and #ref
+	// fragments are not yet supported (see #10, #11); a GitHub source is
+	// always fetched at its default branch and must contain a root
+	// SKILL.md.
 	Source string
+	// Fetcher fetches a GitHub source's contents into a local directory. A
+	// nil Fetcher (the default) uses GitHubFetcher, which performs a real
+	// network fetch. Tests inject a fake implementation so the rest of the
+	// test suite runs without network access. Unused for local-path
+	// sources, which bypass the Fetcher entirely.
+	Fetcher Fetcher
 	// ProjectRoot is the project root skl installs into and where it reads
 	// and writes .skl-lock.json. Defaults to the current working directory
 	// when empty.
@@ -153,13 +163,12 @@ func Add(opts AddOptions) (*AddResult, error) {
 		projectRoot = wd
 	}
 
-	sourceAbs, err := filepath.Abs(opts.Source)
+	rs, err := resolveSource(opts)
 	if err != nil {
-		return nil, fmt.Errorf("resolving source %q: %w", opts.Source, err)
+		return nil, err
 	}
-	info, err := os.Stat(sourceAbs)
-	if err != nil || !info.IsDir() {
-		return nil, fmt.Errorf("unsupported source %q: only local directory paths are supported in this version", opts.Source)
+	if rs.Cleanup != nil {
+		defer rs.Cleanup()
 	}
 
 	targetNames, err := ResolveAdapters(opts.RequestedAdapters, DetectedAdapters())
@@ -167,11 +176,17 @@ func Add(opts AddOptions) (*AddResult, error) {
 		return nil, err
 	}
 
-	skillDir, err := discoverSkillDir(sourceAbs)
+	skillDir, err := discoverSkillDir(rs.Dir)
 	if err != nil {
+		if rs.SourceType == sourceTypeGitHub {
+			return nil, fmt.Errorf("locating a skill in %s: %w", rs.Source, err)
+		}
 		return nil, err
 	}
-	name := filepath.Base(skillDir)
+	name := rs.SuggestedName
+	if name == "" {
+		name = filepath.Base(skillDir)
+	}
 
 	// Read the skill directory once; both the content hash and every
 	// adapter's copy are derived from this single snapshot rather than
@@ -192,7 +207,7 @@ func Add(opts AddOptions) (*AddResult, error) {
 	}
 
 	existing, hasEntry := lf[name]
-	conflict := hasEntry && existing.Source != opts.Source
+	conflict := hasEntry && existing.Source != rs.Source
 	if conflict && !opts.Force {
 		return nil, fmt.Errorf("skill %q is already installed from a different source %q; refusing to overwrite (use --force to replace it)", name, existing.Source)
 	}
@@ -289,8 +304,10 @@ func Add(opts AddOptions) (*AddResult, error) {
 		// Brand-new entry, or a forced conflict replacing the old one
 		// entirely: only this call's targeted adapters are recorded.
 		lf[name] = LockEntry{
-			Source:      opts.Source,
-			SourceType:  "local",
+			Source:      rs.Source,
+			SourceType:  rs.SourceType,
+			SourceURL:   rs.SourceURL,
+			Ref:         rs.Ref,
 			SkillPath:   ".",
 			ContentHash: contentHash,
 			Adapters:    adapterEntries,
