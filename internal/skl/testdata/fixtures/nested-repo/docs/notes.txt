@@ -1,0 +1,3 @@
+A non-skill directory within the fixture repository: it exists on disk
+but has no SKILL.md, for tests asserting a clear error when a tree-path
+source names a path that exists but isn't a skill.
