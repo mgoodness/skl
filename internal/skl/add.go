@@ -22,11 +22,29 @@ type Adapter struct {
 	ProjectDir string
 }
 
+// Adapter names, as named constants to avoid typo-prone string literals
+// scattered across detection, resolution, and destination logic.
+const (
+	ClaudeCodeAdapter = "claude-code"
+	KitAdapter        = "kit"
+	UniversalAdapter  = "universal"
+)
+
 // Adapters is the fixed set of adapters skl installs to in v1.0.
 var Adapters = []Adapter{
-	{Name: "claude-code", ProjectDir: filepath.Join(".claude", "skills")},
-	{Name: "kit", ProjectDir: filepath.Join(".kit", "skills")},
-	{Name: "universal", ProjectDir: filepath.Join(".agents", "skills")},
+	{Name: ClaudeCodeAdapter, ProjectDir: filepath.Join(".claude", "skills")},
+	{Name: KitAdapter, ProjectDir: filepath.Join(".kit", "skills")},
+	{Name: UniversalAdapter, ProjectDir: filepath.Join(".agents", "skills")},
+}
+
+// adapterByName looks up an Adapter by name within Adapters.
+func adapterByName(name string) (Adapter, bool) {
+	for _, a := range Adapters {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return Adapter{}, false
 }
 
 // AddOptions configures a call to Add.
@@ -38,6 +56,11 @@ type AddOptions struct {
 	// and writes .skl-lock.json. Defaults to the current working directory
 	// when empty.
 	ProjectRoot string
+	// RequestedAdapters holds the raw --agent flag values: comma-separated
+	// entries, repeated-flag entries, or both, optionally containing the
+	// literal "*". Empty means no --agent was given, triggering the
+	// detected-adapter default heuristic. See ResolveAdapters.
+	RequestedAdapters []string
 }
 
 // AddResult describes the outcome of a successful Add call.
@@ -50,9 +73,11 @@ type AddResult struct {
 	Adapters map[string]AdapterEntry
 }
 
-// Add fetches the skill at opts.Source and installs it into every adapter's
-// project destination under opts.ProjectRoot, then records the install in
-// that project's .skl-lock.json.
+// Add fetches the skill at opts.Source and installs it into each targeted
+// adapter's project destination under opts.ProjectRoot, then records the
+// install in that project's .skl-lock.json. Which adapters are targeted is
+// determined by ResolveAdapters from opts.RequestedAdapters and the
+// adapters detected on this machine.
 func Add(opts AddOptions) (*AddResult, error) {
 	if opts.Source == "" {
 		return nil, fmt.Errorf("source is required")
@@ -76,6 +101,11 @@ func Add(opts AddOptions) (*AddResult, error) {
 		return nil, fmt.Errorf("unsupported source %q: only local directory paths are supported in this version", opts.Source)
 	}
 
+	targetNames, err := ResolveAdapters(opts.RequestedAdapters, DetectedAdapters())
+	if err != nil {
+		return nil, err
+	}
+
 	skillDir, err := discoverSkillDir(sourceAbs)
 	if err != nil {
 		return nil, err
@@ -91,8 +121,12 @@ func Add(opts AddOptions) (*AddResult, error) {
 	}
 	contentHash := hashFiles(files)
 
-	adapterEntries := make(map[string]AdapterEntry, len(Adapters))
-	for _, adapter := range Adapters {
+	adapterEntries := make(map[string]AdapterEntry, len(targetNames))
+	for _, targetName := range targetNames {
+		adapter, ok := adapterByName(targetName)
+		if !ok {
+			return nil, fmt.Errorf("internal error: resolved unknown adapter %q", targetName)
+		}
 		relDest := filepath.Join(adapter.ProjectDir, name)
 		dest := filepath.Join(projectRoot, relDest)
 		if err := writeFiles(files, dest); err != nil {
