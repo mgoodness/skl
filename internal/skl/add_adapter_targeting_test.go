@@ -45,11 +45,11 @@ func TestAdd_DefaultAdapters_ZeroDetected_InstallsToUniversalOnly(t *testing.T) 
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if len(result.Adapters) != 1 {
-		t.Fatalf("result.Adapters = %v, want exactly 1 entry", result.Adapters)
+	if len(result.Skills[0].Adapters) != 1 {
+		t.Fatalf("result.Skills[0].Adapters = %v, want exactly 1 entry", result.Skills[0].Adapters)
 	}
-	if _, ok := result.Adapters["universal"]; !ok {
-		t.Errorf("result.Adapters missing \"universal\"")
+	if _, ok := result.Skills[0].Adapters["universal"]; !ok {
+		t.Errorf("result.Skills[0].Adapters missing \"universal\"")
 	}
 	assertNoDestination(t, projectRoot, ".claude/skills/simple-skill")
 	assertNoDestination(t, projectRoot, ".kit/skills/simple-skill")
@@ -67,12 +67,12 @@ func TestAdd_DefaultAdapters_OneDetected_InstallsToUniversalPlusThatOne(t *testi
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if len(result.Adapters) != 2 {
-		t.Fatalf("result.Adapters = %v, want exactly 2 entries", result.Adapters)
+	if len(result.Skills[0].Adapters) != 2 {
+		t.Fatalf("result.Skills[0].Adapters = %v, want exactly 2 entries", result.Skills[0].Adapters)
 	}
 	for _, want := range []string{"universal", "claude-code"} {
-		if _, ok := result.Adapters[want]; !ok {
-			t.Errorf("result.Adapters missing %q", want)
+		if _, ok := result.Skills[0].Adapters[want]; !ok {
+			t.Errorf("result.Skills[0].Adapters missing %q", want)
 		}
 	}
 	assertNoDestination(t, projectRoot, ".kit/skills/simple-skill")
@@ -157,16 +157,16 @@ func TestAdd_ExplicitAdapters_CommaSeparatedAndRepeatedAreEquivalent(t *testing.
 		t.Fatalf("Add() repeated-flag error = %v", err)
 	}
 
-	if len(commaResult.Adapters) != len(repeatedResult.Adapters) {
-		t.Fatalf("comma-separated installed %v, repeated-flag installed %v", commaResult.Adapters, repeatedResult.Adapters)
+	if len(commaResult.Skills[0].Adapters) != len(repeatedResult.Skills[0].Adapters) {
+		t.Fatalf("comma-separated installed %v, repeated-flag installed %v", commaResult.Skills[0].Adapters, repeatedResult.Skills[0].Adapters)
 	}
-	for name := range commaResult.Adapters {
-		if _, ok := repeatedResult.Adapters[name]; !ok {
+	for name := range commaResult.Skills[0].Adapters {
+		if _, ok := repeatedResult.Skills[0].Adapters[name]; !ok {
 			t.Errorf("adapter %q installed via comma-separated but not via repeated flags", name)
 		}
 	}
-	if _, ok := commaResult.Adapters["universal"]; ok {
-		t.Errorf("explicit --agent claude-code,kit should not implicitly include universal, got %v", commaResult.Adapters)
+	if _, ok := commaResult.Skills[0].Adapters["universal"]; ok {
+		t.Errorf("explicit --agent claude-code,kit should not implicitly include universal, got %v", commaResult.Skills[0].Adapters)
 	}
 }
 
@@ -184,8 +184,8 @@ func TestAdd_WildcardAdapters_InstallsToUniversalPlusAllDetected_NeverErrors(t *
 	}
 
 	for _, want := range []string{"universal", "claude-code", "kit"} {
-		if _, ok := result.Adapters[want]; !ok {
-			t.Errorf("result.Adapters missing %q", want)
+		if _, ok := result.Skills[0].Adapters[want]; !ok {
+			t.Errorf("result.Skills[0].Adapters missing %q", want)
 		}
 	}
 }
@@ -203,8 +203,8 @@ func TestAdd_WildcardAdapters_NeverTargetsUndetectedAdapter(t *testing.T) {
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if _, ok := result.Adapters["kit"]; ok {
-		t.Errorf("result.Adapters = %v, should never include undetected adapter %q", result.Adapters, "kit")
+	if _, ok := result.Skills[0].Adapters["kit"]; ok {
+		t.Errorf("result.Skills[0].Adapters = %v, should never include undetected adapter %q", result.Skills[0].Adapters, "kit")
 	}
 	assertNoDestination(t, projectRoot, ".kit/skills/simple-skill")
 }

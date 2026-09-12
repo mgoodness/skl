@@ -26,7 +26,7 @@ import (
 //
 // The returned slice is sorted and de-duplicated.
 func ResolveAdapters(requestedAgentValues []string, detected []string) ([]string, error) {
-	requested := normalizeAdapterValues(requestedAgentValues)
+	requested := normalizeFlagValues(requestedAgentValues)
 	detectedSorted := sortedCopy(detected)
 
 	for _, name := range requested {
@@ -95,23 +95,6 @@ func explicitAdapters(requested, detected, detectedSorted []string) ([]string, e
 	}
 	sort.Strings(result)
 	return result, nil
-}
-
-// normalizeAdapterValues flattens a raw --agent value list (which may mix
-// comma-separated entries and repeated-flag entries) into individual,
-// trimmed adapter names, preserving first-seen order.
-func normalizeAdapterValues(raw []string) []string {
-	var out []string
-	for _, r := range raw {
-		for _, part := range strings.Split(r, ",") {
-			part = strings.TrimSpace(part)
-			if part == "" {
-				continue
-			}
-			out = append(out, part)
-		}
-	}
-	return out
 }
 
 func sortedCopy(s []string) []string {

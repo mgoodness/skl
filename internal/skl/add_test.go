@@ -22,8 +22,12 @@ func TestAdd_LocalSingleSkill_CopiesIntoAllThreeAdapterDestinations(t *testing.T
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if result.Name != "simple-skill" {
-		t.Errorf("result.Name = %q, want %q", result.Name, "simple-skill")
+	if len(result.Skills) != 1 {
+		t.Fatalf("result.Skills = %v, want exactly 1 entry", result.Skills)
+	}
+	skill := result.Skills[0]
+	if skill.Name != "simple-skill" {
+		t.Errorf("skill.Name = %q, want %q", skill.Name, "simple-skill")
 	}
 
 	wantDestinations := map[string]string{
@@ -33,13 +37,13 @@ func TestAdd_LocalSingleSkill_CopiesIntoAllThreeAdapterDestinations(t *testing.T
 	}
 
 	for adapter, relDest := range wantDestinations {
-		entry, ok := result.Adapters[adapter]
+		entry, ok := skill.Adapters[adapter]
 		if !ok {
-			t.Errorf("result.Adapters missing entry for %q", adapter)
+			t.Errorf("skill.Adapters missing entry for %q", adapter)
 			continue
 		}
 		if filepath.FromSlash(entry.Path) != relDest {
-			t.Errorf("result.Adapters[%q].Path = %q, want %q", adapter, entry.Path, relDest)
+			t.Errorf("skill.Adapters[%q].Path = %q, want %q", adapter, entry.Path, relDest)
 		}
 
 		installed := filepath.Join(projectRoot, relDest, "SKILL.md")
@@ -217,7 +221,10 @@ func TestAdd_CopiesNestedResourceFiles(t *testing.T) {
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	for adapter, relDest := range result.Adapters {
+	if len(result.Skills) != 1 {
+		t.Fatalf("result.Skills = %v, want exactly 1 entry", result.Skills)
+	}
+	for adapter, relDest := range result.Skills[0].Adapters {
 		installed := filepath.Join(projectRoot, filepath.FromSlash(relDest.Path), "resources", "notes.md")
 		data, err := os.ReadFile(installed)
 		if err != nil {
@@ -255,8 +262,8 @@ func TestAdd_DifferentSkillsHaveDifferentContentHashes(t *testing.T) {
 		t.Fatalf("Add() skill-with-resource error = %v", err)
 	}
 
-	hashA := contentHashFromLockfile(t, projectRootA, resultA.Name)
-	hashB := contentHashFromLockfile(t, projectRootB, resultB.Name)
+	hashA := contentHashFromLockfile(t, projectRootA, resultA.Skills[0].Name)
+	hashB := contentHashFromLockfile(t, projectRootB, resultB.Skills[0].Name)
 
 	if hashA == "" || hashB == "" {
 		t.Fatalf("expected non-empty hashes, got %q and %q", hashA, hashB)

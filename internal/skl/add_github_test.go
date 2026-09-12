@@ -95,8 +95,8 @@ func TestAdd_GitHubShorthand_FetchesAndInstalls(t *testing.T) {
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if result.Name != "simple-skill" {
-		t.Errorf("result.Name = %q, want %q", result.Name, "simple-skill")
+	if len(result.Skills) != 1 || result.Skills[0].Name != "simple-skill" {
+		t.Errorf("result.Skills = %v, want exactly 1 entry named %q", result.Skills, "simple-skill")
 	}
 
 	installed := filepath.Join(projectRoot, ".agents", "skills", "simple-skill", "SKILL.md")
@@ -142,8 +142,8 @@ func TestAdd_GitHubFullURL_BehavesIdenticallyToShorthand(t *testing.T) {
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if result.Name != "simple-skill" {
-		t.Errorf("result.Name = %q, want %q", result.Name, "simple-skill")
+	if len(result.Skills) != 1 || result.Skills[0].Name != "simple-skill" {
+		t.Errorf("result.Skills = %v, want exactly 1 entry named %q", result.Skills, "simple-skill")
 	}
 
 	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
@@ -224,7 +224,7 @@ func TestAdd_GitHubSource_RootSkillWithResource_CopiesNestedFiles(t *testing.T) 
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	installed := filepath.Join(projectRoot, filepath.FromSlash(result.Adapters["universal"].Path), "resources", "notes.md")
+	installed := filepath.Join(projectRoot, filepath.FromSlash(result.Skills[0].Adapters["universal"].Path), "resources", "notes.md")
 	data, err := os.ReadFile(installed)
 	if err != nil {
 		t.Fatalf("reading installed nested resource: %v", err)
@@ -355,8 +355,8 @@ func TestAdd_GitHubTreePath_Shorthand_FetchesAtRefAndInstallsOnlyThePath(t *test
 		t.Fatalf("Add() error = %v", err)
 	}
 
-	if result.Name != "tdd" {
-		t.Errorf("result.Name = %q, want %q (the tree-path's own final segment, not the repo name)", result.Name, "tdd")
+	if len(result.Skills) != 1 || result.Skills[0].Name != "tdd" {
+		t.Errorf("result.Skills = %v, want exactly 1 entry named %q (the tree-path's own final segment, not the repo name)", result.Skills, "tdd")
 	}
 
 	installed := filepath.Join(projectRoot, ".agents", "skills", "tdd", "SKILL.md")
@@ -431,8 +431,8 @@ func TestAdd_GitHubTreePath_FullURL_BehavesIdenticallyToShorthand(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
-	if result.Name != "tdd" {
-		t.Errorf("result.Name = %q, want %q", result.Name, "tdd")
+	if len(result.Skills) != 1 || result.Skills[0].Name != "tdd" {
+		t.Errorf("result.Skills = %v, want exactly 1 entry named %q", result.Skills, "tdd")
 	}
 
 	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
@@ -586,8 +586,8 @@ func TestAdd_GitHubRefPin_Bare_FetchesAtRefAndRecordsPinnedSource(t *testing.T) 
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
-	if result.Name != "simple-skill" {
-		t.Errorf("result.Name = %q, want %q", result.Name, "simple-skill")
+	if len(result.Skills) != 1 || result.Skills[0].Name != "simple-skill" {
+		t.Errorf("result.Skills = %v, want exactly 1 entry named %q", result.Skills, "simple-skill")
 	}
 
 	if len(fetcher.calls) != 1 {
@@ -633,8 +633,8 @@ func TestAdd_GitHubRefPin_WithPath_FetchesAtRefAndInstallsOnlyThePath(t *testing
 	if err != nil {
 		t.Fatalf("Add() error = %v", err)
 	}
-	if result.Name != "tdd" {
-		t.Errorf("result.Name = %q, want %q", result.Name, "tdd")
+	if len(result.Skills) != 1 || result.Skills[0].Name != "tdd" {
+		t.Errorf("result.Skills = %v, want exactly 1 entry named %q", result.Skills, "tdd")
 	}
 
 	installed := filepath.Join(projectRoot, ".agents", "skills", "tdd", "SKILL.md")

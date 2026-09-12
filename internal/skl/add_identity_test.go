@@ -30,8 +30,8 @@ func TestAdd_SameNameAndSource_NewAdapter_ExpandsExistingEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Add() error = %v", err)
 	}
-	if _, ok := result.Adapters["kit"]; !ok {
-		t.Errorf("result.Adapters missing newly-targeted %q, got %v", "kit", result.Adapters)
+	if _, ok := result.Skills[0].Adapters["kit"]; !ok {
+		t.Errorf("result.Skills[0].Adapters missing newly-targeted %q, got %v", "kit", result.Skills[0].Adapters)
 	}
 
 	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
@@ -115,8 +115,8 @@ func TestAdd_SameNameDifferentSource_ForceReplacesEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("forced Add() error = %v", err)
 	}
-	if _, ok := result.Adapters["kit"]; !ok {
-		t.Errorf("result.Adapters missing %q, got %v", "kit", result.Adapters)
+	if _, ok := result.Skills[0].Adapters["kit"]; !ok {
+		t.Errorf("result.Skills[0].Adapters missing %q, got %v", "kit", result.Skills[0].Adapters)
 	}
 
 	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))

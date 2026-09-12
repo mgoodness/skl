@@ -44,13 +44,13 @@ func TestAdd_Global_InstallsIntoEachAdapterGlobalDestination(t *testing.T) {
 	}
 
 	for adapter, wantDest := range wantDestinations {
-		entry, ok := result.Adapters[adapter]
+		entry, ok := result.Skills[0].Adapters[adapter]
 		if !ok {
-			t.Errorf("result.Adapters missing entry for %q", adapter)
+			t.Errorf("result.Skills[0].Adapters missing entry for %q", adapter)
 			continue
 		}
 		if filepath.FromSlash(entry.Path) != wantDest {
-			t.Errorf("result.Adapters[%q].Path = %q, want %q", adapter, entry.Path, wantDest)
+			t.Errorf("result.Skills[0].Adapters[%q].Path = %q, want %q", adapter, entry.Path, wantDest)
 		}
 		if _, err := os.Stat(filepath.Join(wantDest, "SKILL.md")); err != nil {
 			t.Errorf("expected %s/SKILL.md to exist: %v", wantDest, err)

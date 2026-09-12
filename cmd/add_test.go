@@ -135,3 +135,65 @@ func TestAddCommand_GlobalFlag_InstallsIntoGlobalDestinationsAndGlobalLockfile(t
 		t.Errorf("expected global lock.json to exist: %v", err)
 	}
 }
+
+func TestAddCommand_SkillFlag_SelectsAmongMultipleDiscoveredSkills(t *testing.T) {
+	projectRoot, _, _ := setUpFakeProject(t)
+
+	// A second skill directory alongside skills/ under a fresh source root,
+	// so this source resolves to more than one discovered skill.
+	sourceRoot := filepath.Join(projectRoot, "multi-source")
+	for _, name := range []string{"foo", "bar"} {
+		dir := filepath.Join(sourceRoot, "skills", name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating fixture dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("# "+name+"\n"), 0o644); err != nil {
+			t.Fatalf("writing fixture SKILL.md: %v", err)
+		}
+	}
+
+	buf := new(bytes.Buffer)
+	root := cmd.NewRootCmd()
+	root.SetOut(buf)
+	root.SetErr(buf)
+	root.SetArgs([]string{"add", "./multi-source", "--agent", "*", "--skill", "foo"})
+
+	if err := root.ExecuteContext(t.Context()); err != nil {
+		t.Fatalf("Execute() error = %v, output: %s", err, buf.String())
+	}
+
+	if !strings.Contains(buf.String(), "foo") {
+		t.Errorf("output = %q, want it to mention the installed skill %q", buf.String(), "foo")
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "foo", "SKILL.md")); err != nil {
+		t.Errorf("expected selected skill %q to be installed: %v", "foo", err)
+	}
+	if _, err := os.Stat(filepath.Join(projectRoot, ".agents", "skills", "bar")); !os.IsNotExist(err) {
+		t.Errorf("expected unselected skill %q not to be installed, stat err = %v", "bar", err)
+	}
+}
+
+func TestAddCommand_MultiSkillSource_MissingSkillFlag_Errors(t *testing.T) {
+	projectRoot, _, _ := setUpFakeProject(t)
+
+	sourceRoot := filepath.Join(projectRoot, "multi-source")
+	for _, name := range []string{"foo", "bar"} {
+		dir := filepath.Join(sourceRoot, "skills", name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("creating fixture dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("# "+name+"\n"), 0o644); err != nil {
+			t.Fatalf("writing fixture SKILL.md: %v", err)
+		}
+	}
+
+	buf := new(bytes.Buffer)
+	root := cmd.NewRootCmd()
+	root.SetOut(buf)
+	root.SetErr(buf)
+	root.SetArgs([]string{"add", "./multi-source", "--agent", "*"})
+
+	if err := root.ExecuteContext(t.Context()); err == nil {
+		t.Fatal("Execute() error = nil, want error when --skill is omitted for a multi-skill source")
+	}
+}
