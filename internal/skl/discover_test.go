@@ -94,6 +94,96 @@ func TestDiscoverSkills_NoSkillFoundAnywhere_Errors(t *testing.T) {
 	}
 }
 
+// TestDiscoverSkills_GroupedFixture_GroupsEachSkillUnderItsParentPath
+// asserts directory-group assignment: each discovered skill's Group is
+// the source-relative path of its parent directory (the deepest path a
+// user can name to select that skill, per #1's "skills sharing a parent
+// path"). "skills/engineering/tools" contains another directory, so
+// git-hooks' group is that deeper path, not "skills/engineering"; a
+// skill directly under "skills/" (scaffolding) gets group "skills".
+func TestDiscoverSkills_GroupedFixture_GroupsEachSkillUnderItsParentPath(t *testing.T) {
+	rs := resolvedSource{Dir: "testdata/fixtures/grouped-skill-source", SkillPath: "."}
+
+	got, err := discoverSkills(rs)
+	if err != nil {
+		t.Fatalf("discoverSkills() error = %v", err)
+	}
+
+	wantGroups := map[string]string{
+		"code-review": "skills/engineering",
+		"tdd":         "skills/engineering",
+		"git-hooks":   "skills/engineering/tools",
+		"blog":        "skills/writing",
+		"scaffolding": "skills",
+	}
+	if len(got) != len(wantGroups) {
+		t.Fatalf("discoverSkills() = %v, want %d skills", got, len(wantGroups))
+	}
+	for name, group := range wantGroups {
+		var found *discoveredSkill
+		for i := range got {
+			if got[i].Name == name {
+				found = &got[i]
+				break
+			}
+		}
+		if found == nil {
+			t.Errorf("discoverSkills() missing skill %q, got %v", name, got)
+			continue
+		}
+		if found.Group != group {
+			t.Errorf("discoverSkills() skill %q Group = %q, want %q", name, found.Group, group)
+		}
+	}
+}
+
+// TestDiscoverSkills_MultiSkillFixture_GroupsDirectChildrenUnderSkillsDir
+// locks in grouping for the flat fixture: foo and bar share the parent
+// path "skills", and baz, one level deeper, is grouped under
+// "skills/group" rather than the shallower "skills".
+func TestDiscoverSkills_MultiSkillFixture_GroupsDirectChildrenUnderSkillsDir(t *testing.T) {
+	rs := resolvedSource{Dir: "testdata/fixtures/multi-skill-source", SkillPath: "."}
+
+	got, err := discoverSkills(rs)
+	if err != nil {
+		t.Fatalf("discoverSkills() error = %v", err)
+	}
+
+	wantGroups := map[string]string{
+		"foo": "skills",
+		"bar": "skills",
+		"baz": "skills/group",
+	}
+	if len(got) != len(wantGroups) {
+		t.Fatalf("discoverSkills() = %v, want %d skills", got, len(wantGroups))
+	}
+	for name, group := range wantGroups {
+		for i := range got {
+			if got[i].Name == name && got[i].Group != group {
+				t.Errorf("skill %q Group = %q, want %q", name, got[i].Group, group)
+			}
+		}
+	}
+}
+
+// TestDiscoverSkills_RootSkill_HasNoGroup asserts a skill that *is* the
+// source root (tier 1 root-SKILL.md) has an empty Group: there is no
+// parent path within the source to name as a directory group.
+func TestDiscoverSkills_RootSkill_HasNoGroup(t *testing.T) {
+	rs := resolvedSource{Dir: "testdata/fixtures/simple-skill", SkillPath: "."}
+
+	got, err := discoverSkills(rs)
+	if err != nil {
+		t.Fatalf("discoverSkills() error = %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("discoverSkills() = %v, want 1 skill", got)
+	}
+	if got[0].Group != "" {
+		t.Errorf("discoverSkills() Group = %q, want empty", got[0].Group)
+	}
+}
+
 func discoveredNamesSorted(d []discoveredSkill) []string {
 	names := make([]string, len(d))
 	for i, s := range d {

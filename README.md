@@ -24,6 +24,17 @@ skl add ./path/to/some-skill
 skl add --global ./path/to/some-skill
 ```
 
+A multi-skill source (a root with a `skills/` directory containing several skills) requires `--skill` to say which to install: individual skill names and/or **directory-group** paths naming a shared parent, freely mixed, or `"*"` for every skill found.
+
+```console
+# every skill under the source's skills/engineering/ directory
+skl add owner/repo --skill skills/engineering
+# a skill name and a directory group together
+skl add owner/repo --skill tdd,skills/writing
+# every skill the source contains
+skl add owner/repo --skill "*"
+```
+
 ## Releasing
 
 Releases are cut by [release-please](https://github.com/googleapis/release-please) from
