@@ -568,3 +568,125 @@ func TestAdd_GitHubTreePath_CombinedWithRefPin_RejectedClearly(t *testing.T) {
 		})
 	}
 }
+
+func TestAdd_GitHubRefPin_Bare_FetchesAtRefAndRecordsPinnedSource(t *testing.T) {
+	fakeHome(t) // universal only
+	projectRoot := t.TempDir()
+
+	fetcher := &fakeFetcher{fixtures: map[string]string{
+		"owner/simple-skill": "testdata/fixtures/simple-skill",
+	}}
+
+	result, err := skl.Add(skl.AddOptions{
+		Source:            "owner/simple-skill@v2.1.0",
+		Fetcher:           fetcher,
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
+	})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if result.Name != "simple-skill" {
+		t.Errorf("result.Name = %q, want %q", result.Name, "simple-skill")
+	}
+
+	if len(fetcher.calls) != 1 {
+		t.Fatalf("fetcher.calls = %v, want exactly 1 call", fetcher.calls)
+	}
+	if fetcher.calls[0].Ref != "v2.1.0" {
+		t.Errorf("fetcher called with ref %q, want %q", fetcher.calls[0].Ref, "v2.1.0")
+	}
+
+	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
+	if err != nil {
+		t.Fatalf("ReadLockfile() error = %v", err)
+	}
+	entry, ok := lf["simple-skill"]
+	if !ok {
+		t.Fatalf("lockfile missing entry for simple-skill")
+	}
+	if entry.Source != "owner/simple-skill@v2.1.0" {
+		t.Errorf("entry.Source = %q, want %q", entry.Source, "owner/simple-skill@v2.1.0")
+	}
+	if entry.SourceURL != "https://github.com/owner/simple-skill@v2.1.0" {
+		t.Errorf("entry.SourceURL = %q, want %q", entry.SourceURL, "https://github.com/owner/simple-skill@v2.1.0")
+	}
+	if entry.Ref != "v2.1.0" {
+		t.Errorf("entry.Ref = %q, want %q", entry.Ref, "v2.1.0")
+	}
+}
+
+func TestAdd_GitHubRefPin_WithPath_FetchesAtRefAndInstallsOnlyThePath(t *testing.T) {
+	fakeHome(t) // universal only
+	projectRoot := t.TempDir()
+
+	fetcher := &fakeFetcher{fixtures: map[string]string{
+		"owner/nested-repo": "testdata/fixtures/nested-repo",
+	}}
+
+	result, err := skl.Add(skl.AddOptions{
+		Source:            "owner/nested-repo@main/skills/tdd",
+		Fetcher:           fetcher,
+		ProjectRoot:       projectRoot,
+		RequestedAdapters: []string{"*"},
+	})
+	if err != nil {
+		t.Fatalf("Add() error = %v", err)
+	}
+	if result.Name != "tdd" {
+		t.Errorf("result.Name = %q, want %q", result.Name, "tdd")
+	}
+
+	installed := filepath.Join(projectRoot, ".agents", "skills", "tdd", "SKILL.md")
+	data, err := os.ReadFile(installed)
+	if err != nil {
+		t.Fatalf("reading installed SKILL.md: %v", err)
+	}
+	want, err := os.ReadFile("testdata/fixtures/nested-repo/skills/tdd/SKILL.md")
+	if err != nil {
+		t.Fatalf("reading fixture SKILL.md: %v", err)
+	}
+	if string(data) != string(want) {
+		t.Errorf("installed SKILL.md content does not match fixture")
+	}
+
+	if len(fetcher.calls) != 1 {
+		t.Fatalf("fetcher.calls = %v, want exactly 1 call", fetcher.calls)
+	}
+	if fetcher.calls[0].Ref != "main" {
+		t.Errorf("fetcher called with ref %q, want %q", fetcher.calls[0].Ref, "main")
+	}
+
+	lf, err := skl.ReadLockfile(filepath.Join(projectRoot, ".skl-lock.json"))
+	if err != nil {
+		t.Fatalf("ReadLockfile() error = %v", err)
+	}
+	entry, ok := lf["tdd"]
+	if !ok {
+		t.Fatalf("lockfile missing entry for tdd")
+	}
+	if entry.Source != "owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("entry.Source = %q, want canonical tree-path identity %q (the @ref/<path> shorthand is equivalent in effect to the tree-path URL)", entry.Source, "owner/nested-repo/tree/main/skills/tdd")
+	}
+	if entry.Ref != "main" {
+		t.Errorf("entry.Ref = %q, want %q", entry.Ref, "main")
+	}
+	if entry.SkillPath != "skills/tdd" {
+		t.Errorf("entry.SkillPath = %q, want %q", entry.SkillPath, "skills/tdd")
+	}
+}
+
+func TestAdd_GitHubRefPin_CombinedWithLocalPath_RejectedClearly(t *testing.T) {
+	projectRoot := t.TempDir()
+
+	_, err := skl.Add(skl.AddOptions{
+		Source:      "testdata/fixtures/simple-skill@v1",
+		ProjectRoot: projectRoot,
+	})
+	if err == nil {
+		t.Fatalf("Add() error = nil, want a clear error rejecting the local-path + @ref pin combination")
+	}
+	if !contains(err.Error(), "@v1") {
+		t.Errorf("error %q does not mention the offending ref pin", err.Error())
+	}
+}

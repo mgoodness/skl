@@ -81,13 +81,17 @@ func adapterByName(name string) (Adapter, bool) {
 type AddOptions struct {
 	// Source is where the skill is fetched from: a local filesystem path,
 	// a GitHub shorthand ("owner/repo"), a full GitHub URL
-	// ("https://github.com/owner/repo"), or a GitHub tree-path URL
+	// ("https://github.com/owner/repo"), a GitHub tree-path URL
 	// ("owner/repo/tree/<ref>/<path>", or the equivalent full
 	// "https://github.com/owner/repo/tree/<ref>/<path>") naming a ref and
-	// a repo-relative path to install the skill from directly. @ref pinning
-	// on a non-tree-path source is not yet supported (see #11); a
-	// non-tree-path GitHub source is always fetched at its default branch
-	// and must contain a root SKILL.md.
+	// a repo-relative path to install the skill from directly, or a
+	// shorthand/full-URL GitHub source with an @ref pin ("owner/repo@v2.1.0")
+	// or the compact @ref/<path> shorthand ("owner/repo@main/skills/tdd",
+	// equivalent in effect to the corresponding tree-path URL); see #11. A
+	// pin can't be combined with a tree-path source (which already encodes
+	// a ref) or a local-path source (which isn't fetched from a ref at
+	// all). An unpinned, non-tree-path GitHub source is fetched at its
+	// default branch and must contain a root SKILL.md.
 	Source string
 	// Fetcher fetches a GitHub source's contents into a local directory. A
 	// nil Fetcher (the default) uses GitHubFetcher, which performs a real

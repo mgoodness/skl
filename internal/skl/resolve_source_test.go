@@ -211,3 +211,68 @@ func TestResolveSource_GitHubTreePath_PathExistsButNotASkill_ErrorsFromDiscovery
 		t.Error("discoverSkillDir() error = nil, want error: docs/ has no SKILL.md")
 	}
 }
+
+func TestResolveSource_GitHubRefPin_Bare_PassesRefToFetcherAndRecordsPinnedIdentity(t *testing.T) {
+	fetchedDir := t.TempDir()
+	fetcher := &recordingOnlyFetcher{dir: fetchedDir}
+
+	rs, err := resolveSource(AddOptions{Source: "owner/repo@v2.1.0", Fetcher: fetcher})
+	if err != nil {
+		t.Fatalf("resolveSource() error = %v", err)
+	}
+	defer rs.Cleanup()
+
+	if rs.Dir != fetchedDir {
+		t.Errorf("rs.Dir = %q, want the fetcher's returned directory %q", rs.Dir, fetchedDir)
+	}
+	if rs.Ref != "v2.1.0" {
+		t.Errorf("rs.Ref = %q, want %q", rs.Ref, "v2.1.0")
+	}
+	if rs.Source != "owner/repo@v2.1.0" {
+		t.Errorf("rs.Source = %q, want %q", rs.Source, "owner/repo@v2.1.0")
+	}
+	if rs.SourceURL != "https://github.com/owner/repo@v2.1.0" {
+		t.Errorf("rs.SourceURL = %q, want %q", rs.SourceURL, "https://github.com/owner/repo@v2.1.0")
+	}
+	if rs.SkillPath != "." {
+		t.Errorf("rs.SkillPath = %q, want %q", rs.SkillPath, ".")
+	}
+	if rs.SuggestedName != "repo" {
+		t.Errorf("rs.SuggestedName = %q, want %q", rs.SuggestedName, "repo")
+	}
+}
+
+// TestResolveSource_GitHubRefPin_WithPath_MatchesTreePathIdentity asserts
+// #11's acceptance criterion that the compact @ref/<path> shorthand is
+// "equivalent in effect" to the corresponding tree-path URL: both should
+// resolve to the same canonical Source/SourceURL identity, so re-adding
+// the same repo/ref/path via either surface syntax expands the same
+// lockfile entry rather than creating a duplicate.
+func TestResolveSource_GitHubRefPin_WithPath_MatchesTreePathIdentity(t *testing.T) {
+	fetcher := &fixtureRootFetcher{fixtureDir: "testdata/fixtures/nested-repo"}
+
+	rs, err := resolveSource(AddOptions{Source: "owner/nested-repo@main/skills/tdd", Fetcher: fetcher})
+	if err != nil {
+		t.Fatalf("resolveSource() error = %v", err)
+	}
+	defer rs.Cleanup()
+
+	if fetcher.gotRef != "main" {
+		t.Errorf("fetcher was called with ref %q, want %q", fetcher.gotRef, "main")
+	}
+	if rs.Ref != "main" {
+		t.Errorf("rs.Ref = %q, want %q", rs.Ref, "main")
+	}
+	if rs.SkillPath != "skills/tdd" {
+		t.Errorf("rs.SkillPath = %q, want %q", rs.SkillPath, "skills/tdd")
+	}
+	if rs.Source != "owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("rs.Source = %q, want canonical tree-path identity %q", rs.Source, "owner/nested-repo/tree/main/skills/tdd")
+	}
+	if rs.SourceURL != "https://github.com/owner/nested-repo/tree/main/skills/tdd" {
+		t.Errorf("rs.SourceURL = %q, want %q", rs.SourceURL, "https://github.com/owner/nested-repo/tree/main/skills/tdd")
+	}
+	if _, err := os.Stat(filepath.Join(rs.Dir, "SKILL.md")); err != nil {
+		t.Errorf("rs.Dir = %q does not contain SKILL.md directly: %v", rs.Dir, err)
+	}
+}
