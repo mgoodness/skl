@@ -1,0 +1,5 @@
+{
+  "name": "engineering-plugin",
+  "description": "Fixture plugin declaring a directory group and a standalone skill",
+  "skills": ["./skills/engineering", "extra/standalone", "skills/ghost"]
+}

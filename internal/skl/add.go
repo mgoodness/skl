@@ -367,6 +367,7 @@ func installSkill(sk discoveredSkill, rs resolvedSource, targetNames []string, p
 			merged[adapterName] = entry
 		}
 		existing.ContentHash = contentHash
+		existing.PluginName = sk.PluginName
 		existing.Adapters = merged
 		lf[name] = existing
 	} else {
@@ -379,6 +380,7 @@ func installSkill(sk discoveredSkill, rs resolvedSource, targetNames []string, p
 			Ref:         rs.Ref,
 			SkillPath:   skillPath,
 			ContentHash: contentHash,
+			PluginName:  sk.PluginName,
 			Adapters:    adapterEntries,
 		}
 	}

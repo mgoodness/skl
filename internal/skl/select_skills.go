@@ -34,6 +34,13 @@ import (
 //     (#13). Group values mix freely with individual names in the same
 //     list. On a name collision between an individual skill name and a
 //     group value, the individual skill wins (#1).
+//   - A --skill value that names a plugin group (the plugin name a
+//     source's .claude-plugin manifest declares): every discovered skill
+//     stamped with that PluginName is installed (#14), alongside -- never
+//     instead of -- the directory groups, and mixed just as freely. A
+//     skill belonging to both a directory group and a plugin group is
+//     selected exactly once: matched by resolved path, never installed
+//     twice.
 func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) ([]discoveredSkill, error) {
 	requested := normalizeFlagValues(requestedSkillValues)
 
@@ -48,7 +55,7 @@ func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) (
 			return discovered, nil
 		}
 		return nil, fmt.Errorf(
-			"multiple skills found in source; specify --skill with a skill name, a directory group (e.g. \"skills/engineering\"), or \"*\" for all of them:\n%s",
+			"multiple skills found in source; specify --skill with a skill name, a directory group (e.g. \"skills/engineering\"), a plugin group name, or \"*\" for all of them:\n%s",
 			renderSkillPicker(discovered),
 		)
 	}
@@ -72,8 +79,8 @@ func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) (
 	}
 	for _, r := range requested {
 		if d, ok := byName[r]; ok {
-			// An individual skill name beats a directory group of the
-			// same name (#1's collision rule): select only this skill,
+			// An individual skill name beats a directory or plugin group of
+			// the same name (#1's collision rule): select only this skill,
 			// don't sweep the group's other members in.
 			add(d)
 			continue
@@ -81,7 +88,7 @@ func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) (
 
 		matched := false
 		for _, d := range discovered {
-			if !groupMatches(d, r) {
+			if !groupMatches(d, r) && d.PluginName != r {
 				continue
 			}
 			matched = true
@@ -89,7 +96,7 @@ func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) (
 		}
 		if !matched {
 			return nil, fmt.Errorf(
-				"unknown skill or directory group %q; skills found in source:\n%s",
+				"unknown skill, directory group, or plugin group %q; skills found in source:\n%s",
 				r, renderSkillPicker(discovered),
 			)
 		}
@@ -111,13 +118,16 @@ func groupMatches(d discoveredSkill, v string) bool {
 }
 
 // renderSkillPicker formats discovered's skills as a picker nested under
-// their directory groups: one group line per directory, skill names
-// indented beneath (sorted for determinism). Each group line is the
-// directory-group path a user can pass to --skill to select the whole
-// group, and each indented name selects that one skill (except skills
-// with no named parent directory, shown under a literal "(source root)"
-// placeholder that is not itself a selectable value) (#1 stories 11 and
-// 18, #13).
+// their groups: one group line per directory group and per plugin group,
+// skill names indented beneath (sorted for determinism). Each directory
+// group line is the source-relative path a user can pass to --skill to
+// select the whole group; each plugin group line is the plugin name,
+// suffixed "(plugin)" to distinguish it from directory-group paths. A
+// dual-member skill (both a directory group and a plugin group, #14) is
+// listed under both, since either addressing selects it. Each indented
+// name selects that one skill (except skills with no named parent
+// directory, shown under a literal "(source root)" placeholder that is
+// not itself a selectable value) (#1 stories 11 and 18, #13).
 func renderSkillPicker(discovered []discoveredSkill) string {
 	namesByGroup := make(map[string][]string)
 	for _, d := range discovered {
@@ -143,6 +153,27 @@ func renderSkillPicker(discovered []discoveredSkill) string {
 			fmt.Fprintf(&b, "    %s\n", n)
 		}
 	}
+
+	namesByPlugin := make(map[string][]string)
+	for _, d := range discovered {
+		if d.PluginName != "" {
+			namesByPlugin[d.PluginName] = append(namesByPlugin[d.PluginName], d.Name)
+		}
+	}
+	pluginNames := make([]string, 0, len(namesByPlugin))
+	for name := range namesByPlugin {
+		pluginNames = append(pluginNames, name)
+	}
+	sort.Strings(pluginNames)
+	for _, name := range pluginNames {
+		names := namesByPlugin[name]
+		sort.Strings(names)
+		fmt.Fprintf(&b, "  %s (plugin):\n", name)
+		for _, n := range names {
+			fmt.Fprintf(&b, "    %s\n", n)
+		}
+	}
+
 	return strings.TrimSuffix(b.String(), "\n")
 }
 

@@ -1,0 +1,22 @@
+{
+  "name": "test-marketplace",
+  "owner": { "name": "Fixture Owner" },
+  "plugins": [
+    {
+      "name": "frontend-pack",
+      "source": "./plugins/frontend",
+      "description": "declares skills relative to its own source directory",
+      "skills": ["./skills/react"]
+    },
+    {
+      "name": "backend-pack",
+      "source": "./plugins/backend",
+      "skills": ["./skills/api"]
+    },
+    {
+      "name": "bare-pack",
+      "source": "./plugins/backend",
+      "description": "declares no skills[], so contributes no plugin group"
+    }
+  ]
+}
