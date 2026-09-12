@@ -207,8 +207,8 @@ func TestResolveSource_GitHubTreePath_PathExistsButNotASkill_ErrorsFromDiscovery
 	}
 	defer rs.Cleanup()
 
-	if _, err := discoverSkillDir(rs.Dir); err == nil {
-		t.Error("discoverSkillDir() error = nil, want error: docs/ has no SKILL.md")
+	if _, err := discoverSkills(rs); err == nil {
+		t.Error("discoverSkills() error = nil, want error: docs/ has no SKILL.md")
 	}
 }
 

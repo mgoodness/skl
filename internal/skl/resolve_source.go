@@ -19,12 +19,12 @@ const (
 // local directory ready for skill discovery, plus the identity fields Add
 // records into the resulting LockEntry.
 type resolvedSource struct {
-	// Dir is the local directory discoverSkillDir should walk: the local
-	// source path itself, or a GitHub source's freshly fetched temp
-	// directory — for a tree-path source, the authoritative skill
+	// Dir is the local directory discoverSkills should look within: the
+	// local source path itself, or a GitHub source's freshly fetched temp
+	// directory -- for a tree-path source, the authoritative skill
 	// subdirectory within that fetched temp directory (see
-	// resolveGitHubSource), so discoverSkillDir's root-SKILL.md check
-	// lands directly on the skill, no walk needed.
+	// resolveGitHubSource), so discoverSkills' root-SKILL.md check lands
+	// directly on the skill, no further walk needed.
 	Dir string
 	// Cleanup removes any temporary state resolving the source created —
 	// non-nil only for GitHub sources, whose fetched temp directory Add
@@ -38,7 +38,10 @@ type resolvedSource struct {
 	// points at the meaningful, authoritative skill subdirectory, whose
 	// basename is just as good a name); set to the repository name for a
 	// plain (non-tree-path) GitHub source, since a fetched source's temp
-	// directory has no meaningful basename of its own.
+	// directory has no meaningful basename of its own. Only ever applied
+	// by Add when the whole source resolves to a single skill (see
+	// discoverSkills) -- a plain GitHub source containing multiple skills
+	// keeps each one's own flattened name instead.
 	SuggestedName string
 	// Source, SourceType, SourceURL, Ref, and SkillPath are recorded
 	// verbatim into the resulting LockEntry, and Source is what
@@ -49,10 +52,13 @@ type resolvedSource struct {
 	// syntaxes for the same repository (and, for a tree-path source, the
 	// same ref and path) are recognized as the same source.
 	Source, SourceType, SourceURL, Ref string
-	// SkillPath is the repo-relative path (forward-slash form) that is
-	// the skill within its source: "." for a local source or a plain
-	// GitHub source (the source's own root is the skill), or the
-	// tree-path's path for a tree-path GitHub source.
+	// SkillPath is "." for a local source or a plain GitHub source (Dir
+	// itself is where skill discovery starts) or the tree-path's path for
+	// a tree-path GitHub source (Dir already *is* the skill). Add derives
+	// each individual discovered skill's own LockEntry.SkillPath from
+	// this via skillPathFor, joining in the skill's path relative to Dir
+	// when SkillPath is "." and discovery found it nested (e.g.
+	// "skills/tdd").
 	SkillPath string
 }
 

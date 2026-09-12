@@ -91,7 +91,8 @@ type AddOptions struct {
 	// pin can't be combined with a tree-path source (which already encodes
 	// a ref) or a local-path source (which isn't fetched from a ref at
 	// all). An unpinned, non-tree-path GitHub source is fetched at its
-	// default branch and must contain a root SKILL.md.
+	// default branch. See discoverSkills for how a skill (or skills) is
+	// then located within the fetched/resolved source.
 	Source string
 	// Fetcher fetches a GitHub source's contents into a local directory. A
 	// nil Fetcher (the default) uses GitHubFetcher, which performs a real
@@ -108,6 +109,13 @@ type AddOptions struct {
 	// literal "*". Empty means no --agent was given, triggering the
 	// detected-adapter default heuristic. See ResolveAdapters.
 	RequestedAdapters []string
+	// RequestedSkills holds the raw --skill flag values: comma-separated
+	// entries, repeated-flag entries, or both, optionally containing the
+	// literal "*". Empty means no --skill was given, which is only valid
+	// when the source resolves to exactly one skill; a source with more
+	// than one discovered skill otherwise requires --skill to disambiguate
+	// which one(s) to install. See selectSkills.
+	RequestedSkills []string
 	// Global selects global scope: each adapter's global destination
 	// directory (e.g. ~/.claude/skills/<name>) and the global lockfile
 	// (see globalLockfilePath) instead of the project-scoped equivalents.
@@ -122,26 +130,44 @@ type AddOptions struct {
 	Force bool
 }
 
-// AddResult describes the outcome of a successful Add call.
+// AddResult describes the outcome of a successful Add call: one entry per
+// skill actually installed. The common case (a single-skill source, or a
+// multi-skill source with exactly one name given to --skill) has exactly
+// one entry; --skill '*' or a comma-separated/repeated --skill selection
+// can produce more.
 type AddResult struct {
-	// Name is the installed skill's name (its destination directory name).
+	Skills []InstalledSkill
+}
+
+// InstalledSkill describes one skill Add installed successfully.
+type InstalledSkill struct {
+	// Name is the installed skill's name (its destination directory name,
+	// flattened to the skill's own final path segment regardless of how
+	// deeply nested it was within its source; see discoverSkills).
 	Name string
-	// Adapters maps each adapter name Add installed to to its destination:
-	// project-root-relative in project scope, or the absolute global
-	// destination path in global scope (see resolveDestination). Shares
-	// AdapterEntry with LockEntry since both describe the same "adapter
-	// name -> destination" fact.
+	// Adapters maps each adapter name Add installed this skill to, to its
+	// destination: project-root-relative in project scope, or the
+	// absolute global destination path in global scope (see
+	// resolveDestination). Shares AdapterEntry with LockEntry since both
+	// describe the same "adapter name -> destination" fact.
 	Adapters map[string]AdapterEntry
 }
 
-// Add fetches the skill at opts.Source and installs it into each targeted
-// adapter's project destination under opts.ProjectRoot, then records the
-// install in that project's .skl-lock.json. Which adapters are targeted is
-// determined by ResolveAdapters from opts.RequestedAdapters and the
-// adapters detected on this machine.
+// Add fetches the skill(s) at opts.Source and installs each one selected
+// by opts.RequestedSkills (see selectSkills) into every targeted adapter's
+// project destination under opts.ProjectRoot, then records each install in
+// that project's .skl-lock.json. Which adapters are targeted is determined
+// by ResolveAdapters from opts.RequestedAdapters and the adapters detected
+// on this machine.
+//
+// Every selected skill is processed independently against the same
+// in-memory lockfile, which is written once after all of them succeed, so
+// a failure partway through a multi-skill install doesn't leave the
+// lockfile reflecting only some of the skills it copied to disk.
 //
 // Lockfile identity is matched by name and source together (see ADR-0003
-// and CONTEXT.md's "Expand"/"Conflict" definitions):
+// and CONTEXT.md's "Expand"/"Conflict" definitions), independently for
+// each selected skill:
 //
 //   - Same name, same source: the existing entry's adapters map is
 //     expanded with the newly targeted adapter(s) rather than duplicated.
@@ -183,26 +209,28 @@ func Add(opts AddOptions) (*AddResult, error) {
 		return nil, err
 	}
 
-	skillDir, err := discoverSkillDir(rs.Dir)
+	discovered, err := discoverSkills(rs)
 	if err != nil {
 		if rs.SourceType == sourceTypeGitHub {
 			return nil, fmt.Errorf("locating a skill in %s: %w", rs.Source, err)
 		}
 		return nil, err
 	}
-	name := rs.SuggestedName
-	if name == "" {
-		name = filepath.Base(skillDir)
+	// A plain (non-tree-path) GitHub source's fetched temp directory has
+	// no meaningful basename of its own; when the whole source resolves
+	// to a single skill (rs.Dir itself), prefer the repository name
+	// (rs.SuggestedName) over that meaningless basename. This doesn't
+	// apply once the source contains multiple skills (each keeps its own
+	// flattened name) or to a tree-path source (whose Dir already points
+	// at the meaningful, authoritative skill subdirectory).
+	if len(discovered) == 1 && discovered[0].Dir == rs.Dir && rs.SuggestedName != "" {
+		discovered[0].Name = rs.SuggestedName
 	}
 
-	// Read the skill directory once; both the content hash and every
-	// adapter's copy are derived from this single snapshot rather than
-	// re-walking the filesystem per adapter.
-	files, err := readSkillFiles(skillDir)
+	selected, err := selectSkills(discovered, opts.RequestedSkills)
 	if err != nil {
-		return nil, fmt.Errorf("reading skill %q: %w", name, err)
+		return nil, err
 	}
-	contentHash := hashFiles(files)
 
 	lockPath, err := resolveLockPath(projectRoot, opts.Global)
 	if err != nil {
@@ -212,6 +240,40 @@ func Add(opts AddOptions) (*AddResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading lockfile: %w", err)
 	}
+
+	installed := make([]InstalledSkill, 0, len(selected))
+	for _, sk := range selected {
+		adapterEntries, err := installSkill(sk, rs, targetNames, projectRoot, opts, lf)
+		if err != nil {
+			return nil, err
+		}
+		installed = append(installed, InstalledSkill{Name: sk.Name, Adapters: adapterEntries})
+	}
+
+	if err := WriteLockfile(lockPath, lf); err != nil {
+		return nil, fmt.Errorf("writing lockfile: %w", err)
+	}
+
+	return &AddResult{Skills: installed}, nil
+}
+
+// installSkill installs the single skill sk into every adapter named in
+// targetNames and updates lf (in place) with the resulting lockfile entry.
+// It returns the per-adapter destinations installed, for AddResult
+// reporting. See Add's doc comment for the expand/conflict/collision rules
+// this applies.
+func installSkill(sk discoveredSkill, rs resolvedSource, targetNames []string, projectRoot string, opts AddOptions, lf Lockfile) (map[string]AdapterEntry, error) {
+	name := sk.Name
+	skillPath := skillPathFor(sk, rs)
+
+	// Read the skill directory once; both the content hash and every
+	// adapter's copy are derived from this single snapshot rather than
+	// re-walking the filesystem per adapter.
+	files, err := readSkillFiles(sk.Dir)
+	if err != nil {
+		return nil, fmt.Errorf("reading skill %q: %w", name, err)
+	}
+	contentHash := hashFiles(files)
 
 	existing, hasEntry := lf[name]
 	conflict := hasEntry && existing.Source != rs.Source
@@ -315,15 +377,28 @@ func Add(opts AddOptions) (*AddResult, error) {
 			SourceType:  rs.SourceType,
 			SourceURL:   rs.SourceURL,
 			Ref:         rs.Ref,
-			SkillPath:   rs.SkillPath,
+			SkillPath:   skillPath,
 			ContentHash: contentHash,
 			Adapters:    adapterEntries,
 		}
 	}
 
-	if err := WriteLockfile(lockPath, lf); err != nil {
-		return nil, fmt.Errorf("writing lockfile: %w", err)
-	}
+	return adapterEntries, nil
+}
 
-	return &AddResult{Name: name, Adapters: adapterEntries}, nil
+// skillPathFor returns the repo-relative path (forward-slash form) that is
+// sk within its source, for recording in LockEntry.SkillPath: rs.SkillPath
+// itself for a tree-path source (already authoritative -- sk.Dir *is*
+// rs.Dir there, see discoverSkills), or sk.Dir's path relative to rs.Dir
+// otherwise ("." when sk.Dir is rs.Dir itself, i.e. the whole source is
+// the skill, or e.g. "skills/tdd" when discovery found it nested).
+func skillPathFor(sk discoveredSkill, rs resolvedSource) string {
+	if rs.SkillPath != "." {
+		return rs.SkillPath
+	}
+	rel, err := filepath.Rel(rs.Dir, sk.Dir)
+	if err != nil || rel == "." {
+		return "."
+	}
+	return filepath.ToSlash(rel)
 }
