@@ -21,7 +21,7 @@ The concrete directory a skill is copied into for a given adapter and scope, e.g
 Where `skl add` fetches a skill from: a GitHub shorthand, full GitHub URL, GitHub tree-path, or local filesystem path. May contain one skill or many.
 
 **Group**:
-A named, selectable set of skills within a source, used as a value for `--skill` alongside individual skill names. Two kinds: a **directory group** (skills sharing a parent path within the source, e.g. `skills/engineering`) and a **plugin group** (skills declared together in a `.claude-plugin/plugin.json` manifest, discovered via Plugin Manifest Discovery). A skill may belong to one directory group and, optionally, one plugin group at the same time.
+A named, selectable set of skills within a source, used as a value for `--skill` alongside individual skill names. Two kinds: a **directory group** (skills sharing a parent path within the source, e.g. `skills/engineering`) and a **plugin group** (skills declared in a plugin manifest — a `.claude-plugin/plugin.json`'s own `skills[]`, or a `.claude-plugin/marketplace.json` `plugins[]` entry's `skills[]` — discovered via Plugin Manifest Discovery, addressed by the plugin's name). A skill may belong to one directory group and, optionally, one plugin group at the same time.
 
 **Lockfile**:
 The single record of what skl has installed, per scope. There is no separate desired-state manifest in v1.0 (unlike, say, `package.json` vs. `package-lock.json`) — the lockfile is both the record and, in future versions, the thing `update`/`init` would restore from.

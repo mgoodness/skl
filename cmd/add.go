@@ -41,7 +41,7 @@ func newAddCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringSliceVarP(&agents, "agent", "a", nil, "adapter(s) to install for: comma-separated and/or repeated, supports \"*\" for all detected adapters (default: universal plus the detected adapter, if exactly one is detected)")
-	cmd.Flags().StringSliceVarP(&skills, "skill", "s", nil, "skill(s) to install from a multi-skill source: skill names and/or directory-group paths (e.g. \"skills/engineering\"), comma-separated and/or repeated, supports \"*\" for every skill found (required when the source contains more than one skill)")
+	cmd.Flags().StringSliceVarP(&skills, "skill", "s", nil, "skill(s) to install from a multi-skill source: skill names, directory-group paths (e.g. \"skills/engineering\"), and/or plugin-group names (from the source's .claude-plugin manifest), comma-separated and/or repeated, supports \"*\" for every skill found (required when the source contains more than one skill)")
 	cmd.Flags().BoolVarP(&global, "global", "g", false, "install into each adapter's global destination and the global lockfile, instead of the project-scoped equivalents")
 	cmd.Flags().BoolVar(&force, "force", false, "override a conflicting source or a non-empty destination, replacing what's there instead of refusing")
 

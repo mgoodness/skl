@@ -24,16 +24,20 @@ skl add ./path/to/some-skill
 skl add --global ./path/to/some-skill
 ```
 
-A multi-skill source (a root with a `skills/` directory containing several skills) requires `--skill` to say which to install: individual skill names and/or **directory-group** paths naming a shared parent, freely mixed, or `"*"` for every skill found.
+A multi-skill source (a root with a `skills/` directory containing several skills) requires `--skill` to say which to install: individual skill names, **directory-group** paths naming a shared parent, and/or **plugin-group** names, freely mixed, or `"*"` for every skill found.
 
 ```console
 # every skill under the source's skills/engineering/ directory
 skl add owner/repo --skill skills/engineering
 # a skill name and a directory group together
 skl add owner/repo --skill tdd,skills/writing
+# every skill a source's .claude-plugin/plugin.json (or marketplace.json) declares
+skl add owner/repo --skill my-plugin
 # every skill the source contains
 skl add owner/repo --skill "*"
 ```
+
+When a source carries a Claude plugin manifest (`.claude-plugin/plugin.json` or `.claude-plugin/marketplace.json`) at its root, the skills it declares form a **plugin group** addressed by the plugin's name — alongside the directory groups, and installed exactly the same way (there is no separate `--plugin` flag). Each installed skill's lockfile entry records the plugin it belongs to as `pluginName`.
 
 ## Releasing
 
