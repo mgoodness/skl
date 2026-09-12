@@ -20,12 +20,20 @@ import (
 //     regardless (an unambiguous single-skill source is frictionless,
 //     per #1).
 //   - No --skill given, 2+ discovered skills: a hard error listing every
-//     discovered skill's name, doubling as a picker.
-//   - --skill <name>[,<name>...], any discovered count (including one):
-//     every named skill must match a discovered skill's name; an unknown
-//     name is a hard error listing the discovered names as suggestions,
-//     never silently ignored even when there was only one skill to begin
-//     with. Repeated names are de-duplicated, first-seen order preserved.
+//     discovered skill nested under its directory group, doubling as a
+//     picker (#13).
+//   - A --skill value that names a discovered skill: that skill is
+//     installed; an unknown value is a hard error listing the discovered
+//     names and groups as suggestions, never silently ignored even when
+//     there was only one skill to begin with. Repeated names are
+//     de-duplicated, first-seen order preserved.
+//   - A --skill value that names a directory group (a source-relative
+//     path like "skills/engineering", or an ancestor directory of one):
+//     every discovered skill whose Group is that path -- or nested under
+//     it -- is installed, so a shared parent path selects its whole tree
+//     (#13). Group values mix freely with individual names in the same
+//     list. On a name collision between an individual skill name and a
+//     group value, the individual skill wins (#1).
 func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) ([]discoveredSkill, error) {
 	requested := normalizeFlagValues(requestedSkillValues)
 
@@ -35,14 +43,13 @@ func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) (
 		}
 	}
 
-	names := discoveredNames(discovered)
 	if len(requested) == 0 {
 		if len(discovered) == 1 {
 			return discovered, nil
 		}
 		return nil, fmt.Errorf(
-			"multiple skills found in source (%s); specify --skill to choose one or more, or --skill '*' for all of them",
-			strings.Join(names, ", "),
+			"multiple skills found in source; specify --skill with a skill name, a directory group (e.g. \"skills/engineering\"), or \"*\" for all of them:\n%s",
+			renderSkillPicker(discovered),
 		)
 	}
 
@@ -51,33 +58,92 @@ func selectSkills(discovered []discoveredSkill, requestedSkillValues []string) (
 		byName[d.Name] = d
 	}
 
-	seen := make(map[string]bool, len(requested))
 	result := make([]discoveredSkill, 0, len(requested))
-	for _, r := range requested {
-		d, ok := byName[r]
-		if !ok {
-			return nil, fmt.Errorf(
-				"unknown skill %q; skills found in source: %s",
-				r, strings.Join(names, ", "),
-			)
+	seen := make(map[string]bool, len(discovered))
+	// add appends a selected skill to result unless already selected by an
+	// earlier value in this list, so a skill named by name and by group (or
+	// twice) is never duplicated in the install set (#1 story 19).
+	add := func(d discoveredSkill) {
+		if seen[d.Dir] {
+			return
 		}
-		if !seen[d.Name] {
-			seen[d.Name] = true
-			result = append(result, d)
+		seen[d.Dir] = true
+		result = append(result, d)
+	}
+	for _, r := range requested {
+		if d, ok := byName[r]; ok {
+			// An individual skill name beats a directory group of the
+			// same name (#1's collision rule): select only this skill,
+			// don't sweep the group's other members in.
+			add(d)
+			continue
+		}
+
+		matched := false
+		for _, d := range discovered {
+			if !groupMatches(d, r) {
+				continue
+			}
+			matched = true
+			add(d)
+		}
+		if !matched {
+			return nil, fmt.Errorf(
+				"unknown skill or directory group %q; skills found in source:\n%s",
+				r, renderSkillPicker(discovered),
+			)
 		}
 	}
 	return result, nil
 }
 
-// discoveredNames returns discovered's skill names, sorted, for use in
-// error messages that double as a picker.
-func discoveredNames(discovered []discoveredSkill) []string {
-	names := make([]string, len(discovered))
-	for i, d := range discovered {
-		names[i] = d.Name
+// groupMatches reports whether value v selects d as a directory group: v
+// equals d's Group path exactly, or names an ancestor directory of it
+// (v is a path prefix of Group ending at a "/" boundary).
+func groupMatches(d discoveredSkill, v string) bool {
+	if d.Group == "" || v == "" || strings.ContainsAny(v, "\\") {
+		return false
 	}
-	sort.Strings(names)
-	return names
+	if v == d.Group {
+		return true
+	}
+	return strings.HasPrefix(d.Group, v+"/")
+}
+
+// renderSkillPicker formats discovered's skills as a picker nested under
+// their directory groups: one group line per directory, skill names
+// indented beneath (sorted for determinism). Each group line is the
+// directory-group path a user can pass to --skill to select the whole
+// group, and each indented name selects that one skill (except skills
+// with no named parent directory, shown under a literal "(source root)"
+// placeholder that is not itself a selectable value) (#1 stories 11 and
+// 18, #13).
+func renderSkillPicker(discovered []discoveredSkill) string {
+	namesByGroup := make(map[string][]string)
+	for _, d := range discovered {
+		g := d.Group
+		if g == "" || g == "." {
+			g = "(source root)"
+		}
+		namesByGroup[g] = append(namesByGroup[g], d.Name)
+	}
+
+	groups := make([]string, 0, len(namesByGroup))
+	for g := range namesByGroup {
+		groups = append(groups, g)
+	}
+	sort.Strings(groups)
+
+	var b strings.Builder
+	for _, g := range groups {
+		names := namesByGroup[g]
+		sort.Strings(names)
+		fmt.Fprintf(&b, "  %s:\n", g)
+		for _, n := range names {
+			fmt.Fprintf(&b, "    %s\n", n)
+		}
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 // normalizeFlagValues flattens a raw multi-value flag (which may mix

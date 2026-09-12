@@ -20,10 +20,16 @@ const skillsWalkDepth = 3
 // discoveredSkill pairs a discovered skill's absolute directory with a
 // name derived from its own final path segment -- the destination name
 // Add installs it under, flattened regardless of how deeply nested the
-// directory was within its source.
+// directory was within its source -- and with the skill's directory
+// group: the source-relative forward-slash path of the directory that
+// contains it, whose name a user can pass to --skill to select the whole
+// group at once (#13). Group is empty when the skill *is* the source
+// root (the whole source is one skill), since there is no deeper parent
+// path to name.
 type discoveredSkill struct {
-	Name string
-	Dir  string
+	Name  string
+	Dir   string
+	Group string
 }
 
 // discoverSkills locates every skill within rs, following the priority
@@ -60,7 +66,7 @@ func discoverSkills(rs resolvedSource) ([]discoveredSkill, error) {
 			return nil, fmt.Errorf("walking %q: %w", skillsDir, err)
 		}
 		if len(found) > 0 {
-			return toDiscoveredSkills(found), nil
+			return toDiscoveredSkills(found, rs.Dir), nil
 		}
 	}
 
@@ -71,7 +77,7 @@ func discoverSkills(rs resolvedSource) ([]discoveredSkill, error) {
 	if len(found) == 0 {
 		return nil, fmt.Errorf("no SKILL.md found in %q", rs.Dir)
 	}
-	return toDiscoveredSkills(found), nil
+	return toDiscoveredSkills(found, rs.Dir), nil
 }
 
 // discoverRootSkill is the single-skill case: sourceRoot itself must have
@@ -142,11 +148,17 @@ func findSkillDirs(root string, maxDepth int) ([]string, error) {
 
 // toDiscoveredSkills converts a sorted list of skill directories into
 // discoveredSkill values, deriving each one's flattened Name from its own
-// final path segment.
-func toDiscoveredSkills(dirs []string) []discoveredSkill {
+// final path segment and its directory Group from the path of the
+// directory that contains it, relative to sourceRoot (see Group's
+// comment on discoveredSkill).
+func toDiscoveredSkills(dirs []string, sourceRoot string) []discoveredSkill {
 	out := make([]discoveredSkill, len(dirs))
 	for i, d := range dirs {
-		out[i] = discoveredSkill{Name: filepath.Base(d), Dir: d}
+		group := ""
+		if rel, err := filepath.Rel(sourceRoot, d); err == nil && rel != "." {
+			group = filepath.ToSlash(filepath.Dir(rel))
+		}
+		out[i] = discoveredSkill{Name: filepath.Base(d), Dir: d, Group: group}
 	}
 	return out
 }
